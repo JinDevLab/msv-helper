@@ -1,18 +1,17 @@
 # msv-helper-bookmarklet
 
-팀의 시장조사 오퍼레이터(MSV)가 네이버 가격비교에서 하는 반복 작업을 줄여 생산성(capa)을 높이는 북마클릿이다. 팀 내부용이고, 빌드 없이 손으로 쓴 `bookmarklet.js` 한 파일을 브라우저 북마크에 붙여 쓴다. 배포하지 않는다.
+팀의 시장조사 오퍼레이터(MSV)가 네이버 가격비교에서 하는 반복 작업을 줄여 생산성(capa)을 높이는 북마클릿이다. 팀 내부용이고, 평범한 JS로 쓴 `bookmarklet.js`를 한 줄짜리 `bookmarklet-oneline.js`로 바꿔 브라우저 북마크에 붙여 쓴다. 배포하지 않는다.
 
 ## 꼭 지킬 것
 
-- `//` 줄 주석을 쓰지 않고 `/* */`만 쓴다. 북마크 URL에 붙이면 줄바꿈이 사라져 뒤 코드가 전부 주석이 된다.
-- 모든 문장 끝에 `;`를 붙인다. 줄바꿈이 사라지면 자동 세미콜론 삽입에 기댈 수 없다.
-- 코드에 `%`를 그대로 쓰지 않는다. `javascript:` URL에서 퍼센트 인코딩으로 풀린다. 필요하면 `'\x25'`로 쓴다.
+- `bookmarklet.js`를 고치면 `node scripts/build-oneline.js`로 `bookmarklet-oneline.js`를 다시 만들어 같은 커밋에 넣는다. `bookmarklet-oneline.js`는 직접 고치지 않는다.
 - 평소에는 로컬 작업 브랜치에 커밋만 하고 푸시하지 않는다. 소유자가 됐다고 하면 그때 `main`에 합치고 푸시한다.
 
 ## 명령
 
-- 실행: 북마크를 새로 만들고 URL 칸에 `javascript:` 뒤로 `bookmarklet.js` 내용을 붙여 넣는다. 대상 페이지에서 그 북마크를 누른다.
-- 합치기 전 검사: `node --check bookmarklet.js`
+- 한 줄 버전 만들기: `node scripts/build-oneline.js`. 풀어서 문법 검사까지 한다.
+- 실행: 북마크를 새로 만들고 URL 칸에 `bookmarklet-oneline.js` 내용을 그대로 붙여 넣는다. 대상 페이지에서 그 북마크를 누른다.
+- 합치기 전 검사: `node --check bookmarklet.js`와 `node scripts/build-oneline.js`. 뒤 명령 후 `git status`에 `bookmarklet-oneline.js` 변경이 없어야 한다.
 
 ## 문서
 

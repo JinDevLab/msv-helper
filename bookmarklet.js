@@ -1,8 +1,8 @@
-/* msv-helper: 네이버 가격비교 n total 작업 보조. 줄 주석은 쓰지 않는다(CLAUDE.md 참고). */
+// msv-helper: 네이버 가격비교 n total 작업 보조. 고친 뒤에는 node scripts/build-oneline.js로 한 줄 버전을 다시 만든다.
 (() => {
   const PANEL_ID = 'msv-helper-panel';
 
-  /* fo=true가 없으면 붙여서 다시 열고 끝낸다. 다시 열린 페이지에서 북마클릿을 한 번 더 누른다. */
+  // fo=true가 없으면 붙여서 다시 열고 끝낸다. 다시 열린 페이지에서 북마클릿을 한 번 더 누른다.
   const search = location.search;
   if (!/[?&]fo=true(&|$)/.test(search)) {
     const next = /[?&]fo=/.test(search)
@@ -31,7 +31,7 @@
     return null;
   };
 
-  /* 화면에 보이는 글자가 정확히 같은 요소 중 가장 안쪽 것을 찾는다. 패널 안은 뺀다. */
+  // 화면에 보이는 글자가 정확히 같은 요소 중 가장 안쪽 것을 찾는다. 패널 안은 뺀다.
   const findByText = (match) => {
     const nodes = document.querySelectorAll('a, button, li, span, div');
     let best = null;
@@ -57,7 +57,7 @@
 
   const findToggle = () => findByText((t) => t.startsWith('상품타입('));
 
-  /* 실패했을 때 고칠 수 있도록 필터 근처 HTML을 모아 둔다. */
+  // 실패했을 때 고칠 수 있도록 필터 근처 HTML을 모아 둔다.
   let diagnostic = '';
   const collectDiagnostic = (reason, el) => {
     let box = el;
@@ -81,7 +81,7 @@
     ].join('\n');
   };
 
-  /* 상품타입 드롭다운에서 label 항목을 누른다. 결과 문구를 돌려준다. */
+  // 상품타입 드롭다운에서 label 항목을 누른다. 결과 문구를 돌려준다.
   const exclude = async (label) => {
     let option = findByText((t) => t === label);
     if (!option) {
@@ -129,7 +129,7 @@
   const addButton = (text, run) => {
     const btn = document.createElement('button');
     btn.textContent = text;
-    btn.style.cssText = 'display:block;box-sizing:border-box;width:178px;margin-top:4px;padding:6px;border:1px solid #ccc;border-radius:4px;background:#f7f7f7;cursor:pointer;font:inherit';
+    btn.style.cssText = 'display:block;box-sizing:border-box;width:100%;margin-top:4px;padding:6px;border:1px solid #ccc;border-radius:4px;background:#f7f7f7;cursor:pointer;font:inherit';
     btn.onclick = async () => {
       buttons.forEach((b) => { b.disabled = true; });
       status.textContent = '처리 중...';
@@ -158,7 +158,7 @@
 
   panel.appendChild(status);
 
-  /* 결과가 이상하면 이 버튼으로 진단 정보를 복사해 개발자에게 보낸다. */
+  // 결과가 이상하면 이 버튼으로 진단 정보를 복사해 개발자에게 보낸다.
   const copyDiag = document.createElement('button');
   copyDiag.textContent = '진단 복사';
   copyDiag.style.cssText = 'margin-top:8px;padding:2px 6px;border:1px solid #ccc;border-radius:4px;background:#fff;cursor:pointer;font-size:11px;color:#666';
