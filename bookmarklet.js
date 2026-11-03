@@ -130,7 +130,7 @@
     if (!(await waitFor(() => win().location.href + '|' + toggleText() !== before, 5000))) return target.label + ': 눌렀지만 변화 없음';
     // 고정으로 쉬지 않고 "전체" 숫자가 바뀔 때까지 기다린다. 제외할 상품이 없으면 숫자가 그대로라 3초에서 멈춘다.
     await waitFor(() => readTotal() !== totalBefore, 3000);
-    return target.label + ' → ' + (toggleText() || '?');
+    return target.label + (paramOn(target.value) ? ' 제외함' : ' 제외 끔');
   };
 
   // fo=true가 없으면 먼저 주소로 붙이고, 이 검색어에 있고 아직 적용 안 된 제외를 차례로 누른다.
@@ -199,30 +199,54 @@
     return num ? num.textContent.trim() : null;
   };
 
-  // 패널은 상태를 칩으로 보여주고, 작업자가 누르는 버튼은 모두 제외·쿠팡 선택·시트 복사만 크게 둔다.
-  const make = (tag, text, style) => {
+  // 패널 모양은 <style> 하나에 모은다. 칸반에 붙일 한 줄을 시트 행처럼 보여주고, 복사한 칸에는 시트처럼 점선을 두른다.
+  // 초록은 적용된 필터, 파랑은 복사다. 선택자를 패널 id 아래로 묶어 네이버 스타일과 섞이지 않게 한다.
+  const make = (tag, text, cls) => {
     const node = document.createElement(tag);
     if (text) node.textContent = text;
-    if (style) node.style.cssText = style;
+    if (cls) node.className = cls;
     return node;
   };
-  const GREEN = '#03c75a';
-  const MUTED = '#b5b9be';
-  const TEXT_BTN = 'border:0;background:none;padding:0 2px;font:16px/1 sans-serif;color:#999;cursor:pointer';
-  const BTN = 'flex:1;padding:6px 0;border:1px solid #dfe3e8;border-radius:6px;background:#fff;color:#333;font:12px sans-serif;cursor:pointer';
-  const LINK = 'border:0;background:none;padding:0;margin-left:8px;color:#aaa;font:11px sans-serif;cursor:pointer';
+  const CSS = [
+    '{position:fixed;top:12px;right:12px;z-index:2147483647;width:272px;background:#fff;color:#2b2f33;border:1px solid #c9ced4;border-radius:4px;'
+      + 'box-shadow:0 6px 20px rgba(43,47,51,.18);font:12px/1.4 Pretendard,"Malgun Gothic","Apple SD Gothic Neo",sans-serif;text-align:left}',
+    ' *{box-sizing:border-box;margin:0;font:inherit;color:inherit;letter-spacing:0}',
+    ' button{padding:0;border:0;background:none;cursor:pointer}',
+    ' button:disabled{cursor:default;opacity:.4}',
+    ' button:focus-visible{outline:2px solid #1f6feb;outline-offset:-2px}',
+    ' .hd{display:flex;align-items:center;gap:2px;padding:8px 6px 8px 10px}',
+    ' .chips{display:flex;flex:1;flex-wrap:wrap;gap:4px}',
+    ' .chip{padding:2px 8px;border:1px solid #c9ced4;border-radius:10px;font-size:11px;color:#5f6368}',
+    ' .chip[data-s=done]{border-color:#03c75a;background:#03c75a;color:#fff;font-weight:600}',
+    ' .chip[data-s=none]{border-style:dashed;text-decoration:line-through}',
+    ' .x{padding:0 3px;font-size:16px;line-height:1;color:#9aa0a6}',
+    ' .bd{padding:0 10px 8px;border-top:1px solid #e3e6e9}',
+    ' .grid{display:grid;grid-template-columns:1.3fr 1fr .9fr .9fr;margin-top:10px;border-top:1px solid #d7dbe0;border-left:1px solid #d7dbe0}',
+    ' .grid>*{overflow:hidden;padding:3px 6px;border-right:1px solid #d7dbe0;border-bottom:1px solid #d7dbe0;white-space:nowrap;text-overflow:ellipsis}',
+    ' .grid>div{background:#f1f3f5;color:#5f6368;font-size:10px;text-align:center}',
+    ' .grid>button{text-align:left;border-radius:0}',
+    ' .grid>.n{text-align:right;font-size:14px;font-weight:700;font-variant-numeric:tabular-nums}',
+    ' .grid>.cp{outline:2px dashed #1f6feb;outline-offset:-2px;background:#eef4ff}',
+    ' .act{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:8px}',
+    ' .btn{padding:7px 0;border:1px solid #c9ced4;border-radius:4px;font-weight:600}',
+    ' .btn:hover:enabled{background:#f1f3f5}',
+    ' .main{grid-column:1/-1;border-color:#1f6feb;background:#1f6feb;color:#fff}',
+    ' .main:hover:enabled{background:#1a5fd0}',
+    ' .st{margin-top:6px;font-size:11px;color:#5f6368;white-space:pre-line}',
+    ' .ft{display:flex;justify-content:flex-end;gap:8px;margin-top:4px}',
+    ' .ft button{font-size:11px;color:#9aa0a6}',
+  ].map((rule) => '#' + PANEL_ID + rule).join('');
 
-  const panel = make('div', '', [
-    'position:fixed', 'top:12px', 'right:12px', 'z-index:2147483647', 'width:230px', 'box-sizing:border-box',
-    'padding:10px 12px', 'background:#fff', 'color:#222', 'border:1px solid #dfe3e8', 'border-radius:10px',
-    'box-shadow:0 4px 14px rgba(0,0,0,.12)', 'font:12px/1.4 sans-serif', 'text-align:left',
-  ].join(';'));
+  const panel = make('div');
   panel.id = PANEL_ID;
+  panel.appendChild(make('style', CSS));
 
-  const header = make('div', '', 'display:flex;align-items:center');
-  header.appendChild(make('strong', 'N Total Helper', 'flex:1;font-size:13px'));
-  const body = make('div');
-  const fold = make('button', '−', TEXT_BTN);
+  // 머리에는 상태 칩만 둔다. 접어도 칩은 보인다.
+  const header = make('div', '', 'hd');
+  const chips = make('div', '', 'chips');
+  header.appendChild(chips);
+  const body = make('div', '', 'bd');
+  const fold = make('button', '−', 'x');
   fold.title = '접기';
   fold.onclick = () => {
     const open = body.style.display !== 'none';
@@ -232,13 +256,13 @@
   };
   header.appendChild(fold);
   // iframe을 걷어내고 보던 주소를 일반 페이지로 다시 연다.
-  const close = make('button', '×', TEXT_BTN + ';margin-left:4px');
+  const close = make('button', '×', 'x');
   close.title = '닫기';
   header.appendChild(close);
   panel.appendChild(header);
   panel.appendChild(body);
 
-  const status = make('div', '', 'margin-top:6px;font-size:11px;color:#888;white-space:pre-line');
+  const status = make('div', '', 'st');
 
   // 작업 중에는 모든 버튼을 막아 같은 동작이 겹치지 않게 한다.
   let busy = false;
@@ -274,34 +298,41 @@
     return (input && input.value.trim()) || urlQuery();
   };
   const toNumber = (text) => (text || '').replace(/[^0-9]/g, '');
-  const copyText = async (text, what) => {
-    try {
-      await navigator.clipboard.writeText(text);
-      status.textContent = what + ' 복사함';
-      return true;
-    } catch (err) {
-      status.textContent = what + ' 자동 복사가 막혔어. 시트 복사를 다시 눌러.';
+
+  // 복사한 칸에는 시트처럼 점선을 두르고 잠시 뒤 지운다.
+  const cells = [];
+  let unmark = null;
+  const copyText = async (text, what, marked) => {
+    if (!text) {
+      status.textContent = what + ': 아직 값이 없음';
       return false;
     }
+    try {
+      await navigator.clipboard.writeText(text);
+    } catch (err) {
+      status.textContent = what + ' 자동 복사가 막혔어. 다시 눌러.';
+      return false;
+    }
+    status.textContent = what + ' 복사함';
+    for (const cell of cells) cell.classList.toggle('cp', marked.includes(cell));
+    clearTimeout(unmark);
+    unmark = setTimeout(() => cells.forEach((cell) => cell.classList.remove('cp')), 1500);
+    return true;
   };
   // 쿠팡을 고르기 직전 상태. after는 쿠팡을 고른 뒤 주소이고, 주소가 이것과 달라지면(재검색 등) 지운다.
   let saved = null;
-  const sheetRow = () => {
-    const before = saved || { query: searchQuery(), url: win().location.href, total: readTotal() };
-    return [before.query, before.url, toNumber(before.total), saved ? toNumber(readTotal()) : ''].join('\t');
-  };
+  const queryNow = () => (saved ? saved.query : searchQuery());
+  const urlNow = () => (saved ? saved.url : win().location.href);
+  const totalNow = () => (saved ? saved.total : readTotal());
+  const coupangNow = () => (saved ? readTotal() : null);
+  const sheetRow = () => [queryNow(), urlNow(), toNumber(totalNow()), toNumber(coupangNow())].join('\t');
+  const copyRow = () => copyText(sheetRow(), '시트 한 줄', cells);
 
-  // 상태 칩: 적용됨은 초록, 아직이면 회색 테두리, 이 검색어에 없으면 흐리게 줄을 긋는다.
+  // 상태 칩: 적용됨은 초록, 아직이면 회색 테두리, 이 검색어에 없으면 점선에 줄을 긋는다.
   const paramOn = (name) => win().location.search.replace(/^\?/, '').split('&').includes(name + '=true');
   const excludeState = (target) => {
     if (paramOn(target.value)) return 'done';
     return findOption(target.value) ? 'ready' : 'none';
-  };
-  const CHIP = 'padding:2px 7px;border-radius:10px;font:11px sans-serif;';
-  const CHIP_STYLES = {
-    done: 'background:' + GREEN + ';color:#fff;border:1px solid ' + GREEN + ';cursor:pointer',
-    ready: 'background:#fff;color:#555;border:1px solid #cfd3d8;cursor:pointer',
-    none: 'background:#fff;color:' + MUTED + ';border:1px solid #eceef1;text-decoration:line-through;cursor:default',
   };
 
   // 쿠팡만 선택하고, 끝나면 작업이 끝난 것이므로 스프레드시트용 한 줄을 바로 복사한다.
@@ -311,17 +342,15 @@
     if (!result.endsWith('만 선택함')) return [result];
     saved = Object.assign(before, { after: win().location.href });
     render();
-    await copyText(sheetRow(), '시트 한 줄');
+    await copyRow();
     return [result, status.textContent];
   };
   const coupangOn = () => !!saved || win().location.search.replace(/^\?/, '').split('&').includes('mall=' + COUPANG.value);
 
   // 칩을 누르면 그 필터를 켜거나 끈다. 이 검색어에 없는 항목은 누를 수 없다.
-  const chips = make('div', '', 'display:flex;flex-wrap:wrap;gap:4px;margin-top:8px');
-  body.appendChild(chips);
   const chipList = [];
   const addChip = (label, getState, turnOn, turnOff) => {
-    const chip = make('button', label, CHIP);
+    const chip = make('button', label, 'chip');
     chip.onclick = () => run(getState() === 'done' ? turnOff : turnOn);
     chips.appendChild(chip);
     chipList.push({ chip, getState });
@@ -339,48 +368,50 @@
     return [await setMall(COUPANG, false)];
   });
 
-  const actions = make('div', '', 'display:flex;gap:6px;margin-top:8px');
-  body.appendChild(actions);
-  const excludeBtn = make('button', 'fo + 모두 제외', BTN);
-  excludeBtn.onclick = () => run(foAndExclude);
-  const coupangBtn = make('button', '쿠팡 선택', BTN);
-  coupangBtn.onclick = () => run(pickCoupang);
-  actions.appendChild(excludeBtn);
-  actions.appendChild(coupangBtn);
-
-  // 전체 수(쿠팡 선택 전)와 쿠팡 수(선택 후). 숫자를 누르면 그 숫자만 복사한다.
-  const totalNow = () => (saved ? saved.total : readTotal());
-  const coupangNow = () => (saved ? readTotal() : null);
-  const counts = make('div', '', 'display:flex;gap:6px;margin-top:8px');
-  body.appendChild(counts);
-  const countBox = (label, getValue) => {
-    const box = make('button', '', 'flex:1;padding:4px 0;border:0;border-radius:6px;background:#f5f6f8;color:#222;font:12px sans-serif;cursor:pointer');
-    box.title = '눌러서 복사';
-    box.appendChild(make('div', label, 'font-size:10px;color:#888'));
-    const num = make('div', '', 'font-weight:bold;font-size:13px');
-    box.appendChild(num);
-    box.onclick = () => copyText(toNumber(getValue()), label);
-    counts.appendChild(box);
-    return num;
+  // 칸반에 붙는 순서대로 칸을 둔다. 칸을 누르면 그 값만 복사한다.
+  // 전체 수는 쿠팡 선택 전, 쿠팡 수는 선택 후 숫자다.
+  const grid = make('div', '', 'grid');
+  body.appendChild(grid);
+  for (const label of ['검색어', 'URL', '전체', '쿠팡']) grid.appendChild(make('div', label));
+  const addCell = (cls, what, getValue) => {
+    const cell = make('button', '', cls);
+    cell.title = what + ' 복사';
+    cell.onclick = () => copyText(getValue() || '', what, [cell]);
+    grid.appendChild(cell);
+    cells.push(cell);
+    return cell;
   };
-  const totalLabel = countBox('전체 수', totalNow);
-  const coupangLabel = countBox('쿠팡 수', coupangNow);
+  const queryCell = addCell('', '검색어', queryNow);
+  const urlCell = addCell('', 'URL', urlNow);
+  const totalCell = addCell('n', '전체 수', () => toNumber(totalNow()));
+  const coupangCell = addCell('n', '쿠팡 수', () => toNumber(coupangNow()));
+  // URL 칸에는 앞부분이 늘 같아서 ? 뒤 검색 조건만 읽을 수 있게 풀어 보인다.
+  const readable = (url) => {
+    try {
+      return decodeURIComponent(url.replace(/^[^?]*\?/, ''));
+    } catch (err) {
+      return url;
+    }
+  };
 
-  const sheetBtn = make('button', '시트 한 줄 복사', 'display:block;box-sizing:border-box;width:100%;margin-top:8px;padding:7px 0;border:0;border-radius:6px;'
-    + 'background:' + GREEN + ';color:#fff;font:bold 12px sans-serif;cursor:pointer');
-  sheetBtn.onclick = () => copyText(sheetRow(), '시트 한 줄');
-  body.appendChild(sheetBtn);
+  const actions = make('div', '', 'act');
+  body.appendChild(actions);
+  const excludeBtn = make('button', '모두 제외', 'btn');
+  excludeBtn.title = 'fo=true를 붙이고 해외직구, 중고, 렌탈을 제외';
+  excludeBtn.onclick = () => run(foAndExclude);
+  const coupangBtn = make('button', '쿠팡 선택', 'btn');
+  coupangBtn.title = '쿠팡만 선택하고 시트 한 줄을 복사';
+  coupangBtn.onclick = () => run(pickCoupang);
+  const sheetBtn = make('button', '시트 한 줄 복사', 'btn main');
+  sheetBtn.onclick = copyRow;
+  for (const btn of [excludeBtn, coupangBtn, sheetBtn]) actions.appendChild(btn);
   body.appendChild(status);
 
-  // 따로 복사와 개발용 버튼은 맨 아래 작게 둔다.
-  const footer = make('div', '', 'margin-top:6px;text-align:right');
-  const titleBtn = make('button', '검색어', LINK);
-  titleBtn.onclick = () => copyText(saved ? saved.query : searchQuery(), '검색어');
-  const urlBtn = make('button', 'URL', LINK);
-  urlBtn.onclick = () => copyText(saved ? saved.url : win().location.href, 'URL');
+  // 개발용 버튼은 맨 아래 작게 둔다.
+  const footer = make('div', '', 'ft');
 
   // 결과가 이상하면 이 버튼으로 상태를 복사해 개발자에게 보낸다.
-  const diag = make('button', '진단', LINK);
+  const diag = make('button', '진단');
   diag.onclick = () => {
     const text = JSON.stringify({
       url: win().location.href,
@@ -394,7 +425,7 @@
   };
 
   // 개발용: 쇼핑몰선택을 열기 전과 연 뒤의 전체 HTML을 msv-dom-shoptype.html로 내려받는다.
-  const dump = make('button', '덤프', LINK);
+  const dump = make('button', '덤프');
   dump.onclick = async () => {
     dump.disabled = true;
     dump.textContent = '덤프 중...';
@@ -415,15 +446,11 @@
     dump.textContent = '덤프 저장함';
     dump.disabled = false;
   };
-  for (const btn of [titleBtn, urlBtn, diag, dump]) footer.appendChild(btn);
+  footer.appendChild(diag);
+  footer.appendChild(dump);
   body.appendChild(footer);
 
   // 상태와 버튼을 지금 페이지에 맞춘다. iframe 안에서 페이지가 바뀌므로 주기적으로 부른다.
-  const setEnabled = (btn, on) => {
-    btn.disabled = !on || busy;
-    btn.style.color = btn.disabled ? MUTED : '#333';
-    btn.style.cursor = btn.disabled ? 'default' : 'pointer';
-  };
   function render() {
     let loaded = true;
     try {
@@ -438,14 +465,16 @@
 
     for (const { chip, getState } of chipList) {
       const state = getState();
-      chip.style.cssText = CHIP + CHIP_STYLES[state];
+      chip.dataset.s = state;
       chip.disabled = state === 'none' || busy;
     }
-    setEnabled(excludeBtn, !paramOn('fo') || EXCLUDES.some((target) => excludeState(target) === 'ready'));
-    setEnabled(coupangBtn, !coupangOn() && !!readTotal());
+    excludeBtn.disabled = busy || (paramOn('fo') && !EXCLUDES.some((target) => excludeState(target) === 'ready'));
+    coupangBtn.disabled = busy || coupangOn() || !readTotal();
 
-    totalLabel.textContent = totalNow() || '-';
-    coupangLabel.textContent = coupangNow() || '-';
+    queryCell.textContent = queryNow() || '-';
+    urlCell.textContent = readable(urlNow());
+    totalCell.textContent = totalNow() || '-';
+    coupangCell.textContent = coupangNow() || '-';
   }
 
   const ticker = setInterval(() => {
