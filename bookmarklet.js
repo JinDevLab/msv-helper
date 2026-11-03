@@ -125,9 +125,11 @@
       press(toggle);
       await sleep(300);
     }
+    const totalBefore = readTotal();
     press(option);
     if (!(await waitFor(() => win().location.href + '|' + toggleText() !== before, 5000))) return target.label + ': 눌렀지만 변화 없음';
-    await sleep(1500);
+    // 고정으로 쉬지 않고 "전체" 숫자가 바뀔 때까지 기다린다. 제외할 상품이 없으면 숫자가 그대로라 3초에서 멈춘다.
+    await waitFor(() => readTotal() !== totalBefore, 3000);
     return target.label + ' → ' + (toggleText() || '?');
   };
 
@@ -167,7 +169,7 @@
       }
     }
     // 목록은 바로 보이지만 몰 목록 응답이 오기 전에 누르면 저장이 반영되지 않을 수 있어 조금 기다린다.
-    await sleep(1000);
+    await sleep(300);
     const target = findMall(mall);
     if (!target) return mall.label + ': 쇼핑몰 목록에 없음';
     for (const li of mallItems()) {
@@ -176,13 +178,15 @@
         await sleep(150);
       }
     }
-    await sleep(500);
+    await sleep(300);
     const save = doc().querySelector('a[data-shp-area-id="shoptypesave"]');
     if (!save) return mall.label + ': 저장 버튼이 없음';
     const before = win().location.href;
+    const totalBefore = readTotal();
     press(save);
     if (!(await waitFor(() => win().location.href !== before, 5000))) return mall.label + ': 저장했지만 주소 변화 없음';
-    await sleep(1500);
+    // 쿠팡 수를 바로 읽으므로 "전체" 숫자가 바뀔 때까지 기다린다.
+    await waitFor(() => readTotal() !== totalBefore, 5000);
     return mall.label + (on ? '만 선택함' : ' 선택 끔');
   };
   const selectOnlyMall = (mall) => setMall(mall, true);
