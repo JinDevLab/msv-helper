@@ -85,8 +85,7 @@
     }
   };
 
-  // 필터를 스크립트로 클릭하면 네이버가 실제 마우스 클릭이 아니라고 보고 검색 요청을 418로 막는다.
-  // 그래서 파라미터만 바꾼 주소로 iframe을 새로 연다. 공유받은 링크를 여는 것과 같은 일반 페이지 로드다.
+  // fo=true는 화면에 누를 곳이 없는 주소 옵션이라, 파라미터만 바꾼 주소로 iframe을 새로 연다.
   // changes는 { 이름: 값 }이고, 값이 null이면 그 파라미터를 뺀다.
   const openWith = async (changes) => {
     const loc = win().location;
@@ -106,23 +105,87 @@
     }, 15000);
   };
 
-  // n total을 시작할 때 fo=true와 제외를 한 번의 페이지 로드로 같이 붙인다.
-  // 여러 개를 한 번에 제외해도 드롭다운에 "해외직구제외,중고제외"처럼 같이 적용된다(실제 네이버에서 확인).
-  const exclude = async (targets) => {
-    const changes = { fo: 'true' };
-    for (const target of targets) {
-      changes[target.value] = 'true';
-      changes[target.show] = null;
+  // 필터는 화면에서 누른다. 페이지를 새로 여는 주소 방식은 캡차가 자주 떴다.
+  // click 하나만 보내면 네이버 검색 API가 418로 막아서, 예전 확장 프로그램처럼 마우스 이벤트를 차례로 보낸다.
+  const press = (el) => {
+    const init = { bubbles: true, cancelable: true, view: win() };
+    for (const type of ['mouseenter', 'mouseover', 'mousedown', 'mouseup', 'click']) {
+      el.dispatchEvent(new (win().MouseEvent)(type, init));
     }
-    const names = ['fo'].concat(targets.map((t) => t.label)).join('·');
-    if (!(await openWith(changes))) return names + ': 새 페이지에서 전체 수를 못 읽음';
-    return names + ' 제외함 → ' + (toggleText() || '?');
   };
 
-  const selectOnlyMall = async (mall) => {
-    if (!(await openWith({ mall: mall.value }))) return mall.label + ': 새 페이지에서 전체 수를 못 읽음';
-    return mall.label + '만 선택함';
+  // 드롭다운을 열고 항목을 누른 뒤, 주소나 토글 글자가 바뀔 때까지 기다린다.
+  // 끌 때도 같은 항목을 다시 누른다. 클릭 뒤 DOM이 새로 그려지므로 항목은 매번 다시 찾는다.
+  const clickOption = async (target) => {
+    const option = findOption(target.value);
+    if (!option) return target.label + ': 이 검색어에는 없음';
+    const before = win().location.href + '|' + toggleText();
+    const toggle = findToggle();
+    if (toggle) {
+      press(toggle);
+      await sleep(300);
+    }
+    press(option);
+    if (!(await waitFor(() => win().location.href + '|' + toggleText() !== before, 5000))) return target.label + ': 눌렀지만 변화 없음';
+    await sleep(1500);
+    return target.label + ' → ' + (toggleText() || '?');
   };
+
+  // fo=true가 없으면 먼저 주소로 붙이고, 이 검색어에 있고 아직 적용 안 된 제외를 차례로 누른다.
+  const foAndExclude = async () => {
+    const lines = [];
+    if (!paramOn('fo')) {
+      if (!(await openWith({ fo: 'true' }))) return ['fo: 새 페이지에서 전체 수를 못 읽음'];
+      lines.push('fo 켬');
+    }
+    for (const target of EXCLUDES) {
+      if (excludeState(target) === 'ready') lines.push(await clickOption(target));
+    }
+    return lines;
+  };
+
+  // 쇼핑몰선택 레이어. 열 때 목록을 불러오고, 열리면 레이어에 open 클래스가 붙는다.
+  // 목록 항목은 li[data-shp-area-id="shop"]이고 data-shp-contents-dtl의 filter_value_id가 몰 번호다.
+  const mallItems = () => Array.from(doc().querySelectorAll('li[data-shp-area-id="shop"][data-shp-contents-dtl]'));
+  const findMall = (mall) => mallItems().find((li) => filterValue(li) === mall.value || li.getAttribute('data-shp-contents-id') === mall.label);
+  const isChecked = (li) => {
+    const input = li && li.querySelector('input[type="checkbox"]');
+    return !!(input && input.checked);
+  };
+
+  // on이면 그 몰만 체크하고, 아니면 모든 체크를 풀고 저장한다.
+  const setMall = async (mall, on) => {
+    const toggle = doc().querySelector('a[data-shp-area-id="shoptype"]');
+    if (!toggle) return mall.label + ': 쇼핑몰선택이 없는 화면';
+    const layer = toggle.parentElement.querySelector('[class*="subFilter_layer_mall"]');
+    if (!layer || !layer.classList.contains('open')) press(toggle);
+    if (!(await waitFor(() => findMall(mall), 3000))) {
+      const tab = doc().querySelector('li[data-shp-area-id="shoptab"][data-shp-contents-type="오픈마켓/종합몰"] a');
+      if (tab) {
+        press(tab);
+        await waitFor(() => findMall(mall), 3000);
+      }
+    }
+    // 목록은 바로 보이지만 몰 목록 응답이 오기 전에 누르면 저장이 반영되지 않을 수 있어 조금 기다린다.
+    await sleep(1000);
+    const target = findMall(mall);
+    if (!target) return mall.label + ': 쇼핑몰 목록에 없음';
+    for (const li of mallItems()) {
+      if (isChecked(li) !== (on && li === target)) {
+        press(li.querySelector('label') || li);
+        await sleep(150);
+      }
+    }
+    await sleep(500);
+    const save = doc().querySelector('a[data-shp-area-id="shoptypesave"]');
+    if (!save) return mall.label + ': 저장 버튼이 없음';
+    const before = win().location.href;
+    press(save);
+    if (!(await waitFor(() => win().location.href !== before, 5000))) return mall.label + ': 저장했지만 주소 변화 없음';
+    await sleep(1500);
+    return mall.label + (on ? '만 선택함' : ' 선택 끔');
+  };
+  const selectOnlyMall = (mall) => setMall(mall, true);
 
   // 판매처 탭 "전체" 옆 숫자. 쿠팡만 선택하기 전에는 전체 수, 뒤에는 쿠팡 수다.
   const readTotal = () => {
@@ -264,20 +327,18 @@
     () => apply('fo 켬', { fo: 'true' }),
     () => apply('fo 끔', { fo: null }));
   for (const target of EXCLUDES) {
-    addChip(target.label.slice(0, 2), () => excludeState(target),
-      () => apply(target.label + ' 제외 켬', { [target.value]: 'true', [target.show]: null }),
-      () => apply(target.label + ' 제외 끔', { [target.value]: null }));
+    const toggleOption = async () => [await clickOption(target)];
+    addChip(target.label.slice(0, 2), () => excludeState(target), toggleOption, toggleOption);
   }
-  addChip('쿠팡', () => (coupangOn() ? 'done' : 'ready'), pickCoupang, () => {
+  addChip('쿠팡', () => (coupangOn() ? 'done' : 'ready'), pickCoupang, async () => {
     saved = null;
-    return apply('쿠팡 선택 끔', { mall: null });
+    return [await setMall(COUPANG, false)];
   });
 
   const actions = make('div', '', 'display:flex;gap:6px;margin-top:8px');
   body.appendChild(actions);
-  // fo=true와, 셋 중 이 검색어에 있고 아직 적용 안 된 제외를 한 번에 붙인다.
   const excludeBtn = make('button', 'fo + 모두 제외', BTN);
-  excludeBtn.onclick = () => run(async () => [await exclude(EXCLUDES.filter((target) => excludeState(target) === 'ready'))]);
+  excludeBtn.onclick = () => run(foAndExclude);
   const coupangBtn = make('button', '쿠팡 선택', BTN);
   coupangBtn.onclick = () => run(pickCoupang);
   actions.appendChild(excludeBtn);
