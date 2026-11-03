@@ -3,6 +3,7 @@
 - `bookmarklet.js`: 북마클릿 전체 코드 원본. 즉시 실행 함수 하나로 감싸 페이지 전역 변수를 건드리지 않는다.
 - `scripts/build-oneline.js`: 원본을 북마크 URL용 한 줄로 바꾸고, 풀어서 문법을 확인한다.
 - `bookmarklet-oneline.js`: 생성 결과. 북마크 URL 칸에 그대로 붙인다.
+- `scripts/dump-dom.js`: 개발용. 네이버 페이지 콘솔에서 실행하면 드롭다운을 열기 전후의 전체 HTML을 `msv-dom.html`로 내려받는다. 이 파일은 커밋하지 않는다.
 - `docs/`: 프로젝트 문서.
 
 ## 실행 흐름
