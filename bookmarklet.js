@@ -214,8 +214,9 @@
     ' button{padding:0;border:0;background:none;cursor:pointer}',
     ' button:disabled{cursor:default;opacity:.4}',
     ' button:focus-visible{outline:2px solid #1f6feb;outline-offset:-2px}',
-    ' .hd{display:flex;align-items:center;gap:2px;padding:8px 6px 8px 10px}',
-    ' .chips{display:flex;flex:1;flex-wrap:wrap;gap:4px}',
+    ' .hd{display:flex;align-items:center;gap:2px;padding:8px 6px 6px 10px}',
+    ' .t{flex:1;font-size:13px;font-weight:700}',
+    ' .chips{display:flex;flex-wrap:wrap;gap:4px;padding:0 10px 8px}',
     ' .chip{padding:2px 8px;border:1px solid #c9ced4;border-radius:10px;font-size:11px;color:#5f6368}',
     ' .chip[data-s=done]{border-color:#03c75a;background:#03c75a;color:#fff;font-weight:600}',
     ' .chip[data-s=none]{border-style:dashed;text-decoration:line-through}',
@@ -233,6 +234,7 @@
     ' .main{grid-column:1/-1;border-color:#1f6feb;background:#1f6feb;color:#fff}',
     ' .main:hover:enabled{background:#1a5fd0}',
     ' .st{margin-top:6px;font-size:11px;color:#5f6368;white-space:pre-line}',
+    ' .st:empty{display:none}',
     ' .ft{display:flex;justify-content:flex-end;gap:8px;margin-top:4px}',
     ' .ft button{font-size:11px;color:#9aa0a6}',
   ].map((rule) => '#' + PANEL_ID + rule).join('');
@@ -241,10 +243,10 @@
   panel.id = PANEL_ID;
   panel.appendChild(make('style', CSS));
 
-  // 머리에는 상태 칩만 둔다. 접어도 칩은 보인다.
+  // 머리 아래에 상태 칩을 둔다. 접어도 칩은 보인다.
   const header = make('div', '', 'hd');
+  header.appendChild(make('strong', 'MSV Helper', 't'));
   const chips = make('div', '', 'chips');
-  header.appendChild(chips);
   const body = make('div', '', 'bd');
   const fold = make('button', '−', 'x');
   fold.title = '접기';
@@ -260,11 +262,13 @@
   close.title = '닫기';
   header.appendChild(close);
   panel.appendChild(header);
+  panel.appendChild(chips);
   panel.appendChild(body);
 
   const status = make('div', '', 'st');
 
   // 작업 중에는 모든 버튼을 막아 같은 동작이 겹치지 않게 한다.
+  // 성공은 칩과 숫자로 보이므로, 상태 줄에는 "함, 켬, 끔"으로 끝나는 성공 문구를 빼고 실패만 남긴다.
   let busy = false;
   const run = async (task) => {
     if (busy) return;
@@ -272,7 +276,7 @@
     status.textContent = '처리 중...';
     render();
     try {
-      status.textContent = (await task()).join('\n');
+      status.textContent = (await task()).filter((line) => line && !/(함|켬|끔)$/.test(line)).join('\n');
     } catch (err) {
       status.textContent = '오류: ' + err.message;
     }
@@ -313,7 +317,7 @@
       status.textContent = what + ' 자동 복사가 막혔어. 다시 눌러.';
       return false;
     }
-    status.textContent = what + ' 복사함';
+    status.textContent = '';
     for (const cell of cells) cell.classList.toggle('cp', marked.includes(cell));
     clearTimeout(unmark);
     unmark = setTimeout(() => cells.forEach((cell) => cell.classList.remove('cp')), 1500);
