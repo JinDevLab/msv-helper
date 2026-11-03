@@ -69,6 +69,63 @@
     return target.label + ': 적용 → ' + (toggleText() || '?');
   };
 
+  // 쇼핑몰선택 레이어. 열 때 목록을 불러오고, 열리면 레이어에 open 클래스가 붙는다.
+  // 목록 항목은 li[data-shp-area-id="shop"]이고 data-shp-contents-dtl의 filter_value_id가 몰 번호다.
+  const COUPANG = { label: '쿠팡', value: '613264' };
+  const filterValue = (el) => {
+    try {
+      const item = JSON.parse(el.getAttribute('data-shp-contents-dtl')).find((i) => i.key === 'filter_value_id');
+      return item ? item.value : null;
+    } catch (err) {
+      return null;
+    }
+  };
+  const mallItems = () => Array.from(document.querySelectorAll('li[data-shp-area-id="shop"][data-shp-contents-dtl]'));
+  const findMall = (mall) => mallItems().find((li) => filterValue(li) === mall.value || li.getAttribute('data-shp-contents-id') === mall.label);
+  const isChecked = (li) => {
+    const input = li && li.querySelector('input[type="checkbox"]');
+    return !!(input && input.checked);
+  };
+  // 사람이 누르는 곳인 label을 누른다.
+  const clickMall = (li) => (li.querySelector('label') || li).click();
+
+  const selectOnlyMall = async (mall) => {
+    const toggle = document.querySelector('a[data-shp-area-id="shoptype"]');
+    if (!toggle) return mall.label + ': 쇼핑몰선택이 없는 화면';
+    const layer = toggle.parentElement.querySelector('[class*="subFilter_layer_mall"]');
+    if (!layer || !layer.classList.contains('open')) {
+      toggle.click();
+    }
+    if (!(await waitFor(() => findMall(mall), 3000))) {
+      const tab = document.querySelector('li[data-shp-area-id="shoptab"][data-shp-contents-type="오픈마켓/종합몰"] a');
+      if (tab) {
+        tab.click();
+        await waitFor(() => findMall(mall), 3000);
+      }
+    }
+    const target = findMall(mall);
+    if (!target) return mall.label + ': 쇼핑몰 목록에 없음';
+
+    for (const li of mallItems()) {
+      if (li !== target && isChecked(li)) {
+        clickMall(li);
+        await sleep(150);
+      }
+    }
+    if (!isChecked(target)) {
+      clickMall(target);
+      await sleep(300);
+    }
+
+    const save = document.querySelector('a[data-shp-area-id="shoptypesave"]');
+    if (!save) return mall.label + ': 저장 버튼이 없음';
+    const before = location.href;
+    save.click();
+    if (!(await waitFor(() => location.href !== before, 5000))) return mall.label + ': 저장했지만 주소 변화 없음';
+    await sleep(1500);
+    return mall.label + '만 선택함';
+  };
+
   const panel = document.createElement('div');
   panel.id = PANEL_ID;
   panel.style.cssText = [
@@ -125,6 +182,7 @@
   for (const target of EXCLUDES) {
     addButton(target.label + ' 제외', async () => [await clickExclude(target)]);
   }
+  addButton('쿠팡만 선택', async () => [await selectOnlyMall(COUPANG)]);
 
   // 결과가 이상하면 이 버튼으로 상태를 복사해 개발자에게 보낸다.
   const diag = document.createElement('button');
