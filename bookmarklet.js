@@ -3,77 +3,70 @@
 (() => {
   const PANEL_ID = 'msv-helper-panel';
 
-  // 상품타입 제외 항목. 드롭다운 항목을 누르면 param=true가 붙고 opposite(보기)가 빠진다.
+  // 상품타입 드롭다운의 제외 항목. value는 항목 data-shp-contents-dtl의 filter_value_id다.
   const EXCLUDES = [
-    { label: '해외직구', param: 'exagency', opposite: 'agency' },
-    { label: '중고', param: 'exused', opposite: 'used' },
-    { label: '렌탈', param: 'exrental', opposite: 'rental' },
+    { label: '해외직구', value: 'exagency' },
+    { label: '중고', value: 'exused' },
+    { label: '렌탈', value: 'exrental' },
   ];
 
-  // 검색어 인코딩을 그대로 두려고 URLSearchParams 대신 문자열로 다룬다.
-  const splitParams = (search) => search.replace(/^\?/, '').split('&').filter(Boolean);
-  const nameOf = (pair) => pair.split('=')[0];
-  const getParam = (search, name) => {
-    const pair = splitParams(search).find((p) => nameOf(p) === name);
-    return pair === undefined ? null : pair.slice(name.length + 1);
-  };
-  const withParams = (search, set, remove) => {
-    const drop = Object.keys(set).concat(remove);
-    const pairs = splitParams(search).filter((p) => !drop.includes(nameOf(p)));
-    Object.keys(set).forEach((name) => pairs.push(name + '=' + set[name]));
-    return '?' + pairs.join('&');
-  };
-
   // fo=true가 없으면 붙여서 다시 열고 끝낸다. 다시 열린 페이지에서 북마클릿을 한 번 더 누른다.
-  if (getParam(location.search, 'fo') !== 'true') {
-    location.href = location.pathname + withParams(location.search, { fo: 'true' }, []) + location.hash;
+  // 검색어 인코딩을 그대로 두려고 URLSearchParams 대신 문자열로 다룬다.
+  const pairs = location.search.replace(/^\?/, '').split('&').filter(Boolean);
+  if (!pairs.includes('fo=true')) {
+    const rest = pairs.filter((p) => p.split('=')[0] !== 'fo');
+    location.href = location.pathname + '?' + rest.concat('fo=true').join('&') + location.hash;
     return;
   }
 
   const old = document.getElementById(PANEL_ID);
   if (old) old.remove();
 
-  // 상품타입 드롭다운 항목에서 이 검색어에 있는 필터 값을 읽는다. 닫혀 있어도 DOM에 있다.
-  const availableValues = () => {
-    const values = new Set();
+  const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+  const waitFor = async (check, timeout) => {
+    const end = Date.now() + timeout;
+    while (Date.now() < end) {
+      if (check()) return true;
+      await sleep(100);
+    }
+    return false;
+  };
+
+  // 드롭다운의 토글과 항목은 모두 a[data-shp-area-id="pdtype"]이고, 항목에만 data-shp-contents-dtl이 있다.
+  const findToggle = () => document.querySelector('a[data-shp-area-id="pdtype"]:not([data-shp-contents-dtl])');
+  const findOption = (value) => {
     const links = document.querySelectorAll('a[data-shp-area-id="pdtype"][data-shp-contents-dtl]');
     for (const link of links) {
       try {
-        for (const item of JSON.parse(link.getAttribute('data-shp-contents-dtl'))) {
-          if (item.key === 'filter_value_id') values.add(item.value);
-        }
+        const items = JSON.parse(link.getAttribute('data-shp-contents-dtl'));
+        if (items.some((item) => item.key === 'filter_value_id' && item.value === value)) return link;
       } catch (err) {
         // 형식이 바뀐 항목은 건너뛴다.
       }
     }
-    return values;
+    return null;
+  };
+  const toggleText = () => {
+    const toggle = findToggle();
+    return toggle ? toggle.textContent.trim() : '';
   };
 
-  const isOn = (param) => getParam(location.search, param) === 'true';
-
-  // 네이버가 쓰는 Next.js 라우터로 이동해 패널을 유지한다. 없으면 페이지를 새로 연다.
-  const go = (search) => {
-    const url = location.pathname + search + location.hash;
-    const router = window.next && window.next.router;
-    if (router && typeof router.push === 'function') {
-      Promise.resolve(router.push(url)).then(() => setTimeout(render, 300), () => { location.href = url; });
-    } else {
-      location.href = url;
+  // 사람이 하듯 드롭다운을 열고 항목을 누른 뒤, 주소나 토글 글자가 바뀔 때까지 기다린다.
+  const clickExclude = async (target) => {
+    const option = findOption(target.value);
+    if (!option) return target.label + ': 이 검색어에는 없음';
+    const before = location.href + '|' + toggleText();
+    const toggle = findToggle();
+    if (toggle) {
+      toggle.click();
+      await sleep(300);
     }
-  };
-
-  const applyExcludes = (targets, on) => {
-    const set = {};
-    const remove = [];
-    for (const t of targets) {
-      if (on) {
-        set[t.param] = 'true';
-        remove.push(t.opposite);
-      } else {
-        remove.push(t.param);
-      }
-    }
-    go(withParams(location.search, set, remove));
+    option.click();
+    const changed = await waitFor(() => location.href + '|' + toggleText() !== before, 5000);
+    if (!changed) return target.label + ': 눌렀지만 변화 없음';
+    // 결과 목록이 다시 그려질 시간을 준다.
+    await sleep(1500);
+    return target.label + ': 적용 → ' + (toggleText() || '?');
   };
 
   const panel = document.createElement('div');
@@ -85,52 +78,6 @@
     'box-shadow:0 4px 12px rgba(0,0,0,.2)', 'font:13px/1.4 sans-serif',
   ].join(';');
 
-  const body = document.createElement('div');
-
-  const button = (text, onClick, primary) => {
-    const btn = document.createElement('button');
-    btn.textContent = text;
-    btn.style.cssText = 'display:block;box-sizing:border-box;width:100%;margin-top:4px;padding:6px;'
-      + 'border:1px solid ' + (primary ? '#03c75a' : '#ccc') + ';border-radius:4px;cursor:pointer;font:inherit;'
-      + 'background:' + (primary ? '#03c75a;color:#fff' : '#f7f7f7;color:#222');
-    btn.onclick = onClick;
-    return btn;
-  };
-
-  const line = (text, color) => {
-    const div = document.createElement('div');
-    div.textContent = text;
-    div.style.cssText = 'margin-top:2px;font-size:12px;color:' + (color || '#666');
-    return div;
-  };
-
-  // 현재 URL과 DOM 상태로 패널 내용을 다시 그린다.
-  function render() {
-    if (!document.getElementById(PANEL_ID)) return;
-    body.textContent = '';
-    const values = availableValues();
-    const shown = EXCLUDES.filter((t) => values.has(t.param) || isOn(t.param));
-
-    if (shown.length === 0) {
-      body.appendChild(line('이 검색어에는 해외직구·중고·렌탈 필터가 없어.'));
-      return;
-    }
-
-    const pending = shown.filter((t) => !isOn(t.param));
-    if (pending.length > 1) {
-      body.appendChild(button(pending.map((t) => t.label).join('·') + ' 모두 제외', () => applyExcludes(pending, true), true));
-    }
-    for (const t of shown) {
-      if (isOn(t.param)) {
-        body.appendChild(line('✓ ' + t.label + ' 제외됨', '#03a04a'));
-      }
-    }
-    for (const t of shown) {
-      const text = isOn(t.param) ? t.label + ' 제외 해제' : t.label + '만 제외';
-      body.appendChild(button(text, () => applyExcludes([t], !isOn(t.param))));
-    }
-  }
-
   const header = document.createElement('div');
   header.style.cssText = 'display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;font-weight:bold';
   header.textContent = 'MSV helper';
@@ -140,32 +87,60 @@
   close.style.cssText = 'border:0;background:none;font-size:16px;cursor:pointer;color:#666';
   close.onclick = () => panel.remove();
   header.appendChild(close);
+  panel.appendChild(header);
+
+  const status = document.createElement('div');
+  status.style.cssText = 'margin-top:8px;font-size:12px;color:#666;white-space:pre-line';
+
+  const buttons = [];
+  const addButton = (text, run, primary) => {
+    const btn = document.createElement('button');
+    btn.textContent = text;
+    btn.style.cssText = 'display:block;box-sizing:border-box;width:100%;margin-top:4px;padding:6px;'
+      + 'border:1px solid ' + (primary ? '#03c75a' : '#ccc') + ';border-radius:4px;cursor:pointer;font:inherit;'
+      + 'background:' + (primary ? '#03c75a;color:#fff' : '#f7f7f7;color:#222');
+    btn.onclick = async () => {
+      buttons.forEach((b) => { b.disabled = true; });
+      status.textContent = '처리 중...';
+      try {
+        status.textContent = (await run()).join('\n');
+      } catch (err) {
+        status.textContent = '오류: ' + err.message;
+      }
+      buttons.forEach((b) => { b.disabled = false; });
+    };
+    buttons.push(btn);
+    panel.appendChild(btn);
+  };
+
+  addButton('해외직구·중고·렌탈 모두 제외', async () => {
+    const results = [];
+    for (const target of EXCLUDES) {
+      results.push(await clickExclude(target));
+    }
+    // 드롭다운이 하나만 고르는 방식이면 마지막 항목만 남으므로 최종 상태를 같이 보여준다.
+    results.push('지금 상품타입: ' + (toggleText() || '?'));
+    return results;
+  }, true);
+  for (const target of EXCLUDES) {
+    addButton(target.label + ' 제외', async () => [await clickExclude(target)]);
+  }
 
   // 결과가 이상하면 이 버튼으로 상태를 복사해 개발자에게 보낸다.
   const diag = document.createElement('button');
   diag.textContent = '진단 복사';
   diag.style.cssText = 'margin-top:8px;padding:2px 6px;border:1px solid #ccc;border-radius:4px;background:#fff;cursor:pointer;font-size:11px;color:#666';
   diag.onclick = () => {
-    const toggle = document.querySelector('a[data-shp-area-id="pdtype"]:not([data-shp-contents-dtl])');
     const text = JSON.stringify({
       url: location.href,
-      available: Array.from(availableValues()),
-      toggle: toggle ? toggle.textContent : null,
-      nextRouter: !!(window.next && window.next.router),
+      toggle: toggleText(),
+      options: EXCLUDES.map((t) => t.value + ':' + !!findOption(t.value)),
+      status: status.textContent,
     }, null, 1);
     navigator.clipboard.writeText(text).then(() => { diag.textContent = '복사함'; }, () => { prompt('복사해서 보내줘', text); });
   };
 
-  panel.appendChild(header);
-  panel.appendChild(body);
+  panel.appendChild(status);
   panel.appendChild(diag);
   document.body.appendChild(panel);
-  render();
-
-  // 검색어를 바꾸는 등 페이지 안에서 이동하면 패널을 다시 그린다.
-  try {
-    window.next.router.events.on('routeChangeComplete', () => setTimeout(render, 300));
-  } catch (err) {
-    // 라우터가 없으면 버튼을 누를 때만 다시 그린다.
-  }
 })();
