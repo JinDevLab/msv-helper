@@ -205,9 +205,20 @@
 
   // 칸반(스프레드시트)에 붙일 값: 검색어, URL, 전체 수, 쿠팡 수.
   // URL과 전체 수는 쿠팡을 고르기 직전 값이다. 숫자는 쉼표를 빼서 숫자 칸으로 들어가게 한다.
+  // 주소의 query는 필터를 바꾸면 "-단어"가 빠지고(xq로 따로 감), 검색창에는 입력한 그대로 남는다.
+  // 그래서 복사할 검색어는 검색창에서 읽고, 검색어가 바뀌었는지는 주소로 본다.
+  // 나뉜 주소에서는 origQuery에 입력 그대로가 있으므로 그쪽을 먼저 본다.
+  const urlQuery = () => {
+    const pairs = win().location.search.replace(/^\?/, '').split('&');
+    const read = (name) => {
+      const pair = pairs.find((p) => p.split('=')[0] === name);
+      return pair ? decodeURIComponent(pair.slice(name.length + 1).replace(/\+/g, ' ')) : '';
+    };
+    return read('origQuery') || read('query');
+  };
   const searchQuery = () => {
-    const pair = win().location.search.replace(/^\?/, '').split('&').find((p) => p.split('=')[0] === 'query');
-    return pair ? decodeURIComponent(pair.slice(6).replace(/\+/g, ' ')) : '';
+    const input = doc().querySelector('input[data-shp-area-id="input"]');
+    return (input && input.value.trim()) || urlQuery();
   };
   const toNumber = (text) => (text || '').replace(/[^0-9]/g, '');
   const copyText = async (text, what) => {
@@ -357,7 +368,7 @@
     }
     if (!loaded) return;
 
-    const query = searchQuery();
+    const query = urlQuery();
     if (lastQuery !== null && query !== lastQuery) saved = null;
     lastQuery = query;
 
