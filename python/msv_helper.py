@@ -1,12 +1,12 @@
 """msv-helper 파이썬 로더.
 
 자동화 전용 Chrome 프로필을 디버그 포트로 띄우고(이미 떠 있으면 그대로 붙는다),
-네이버 가격비교 검색 페이지가 열릴 때마다 bookmarklet.js를 받아 넣는다. 북마크를 누르지 않아도 패널이 뜬다.
+네이버 가격비교 검색 페이지가 새로 열릴 때마다 저장소의 py-bookmarklet.js를 넣는다.
+확장 프로그램의 content script처럼 동작해서 북마크를 누르지 않아도 패널이 뜨고, iframe 없이 페이지를 바로 다룬다.
 기본 프로필은 Chrome 136부터 디버그 연결을 막아서 따로 프로필을 쓴다. 네이버는 이 프로필에서 한 번 로그인한다.
 
 사용:
-  python python/msv_helper.py          원격 main의 bookmarklet.js를 쓴다.
-  python python/msv_helper.py --local  이 저장소의 bookmarklet.js를 쓴다. 푸시 전에 확인할 때 쓴다.
+  python python/msv_helper.py
 """
 import argparse
 import asyncio
@@ -20,13 +20,14 @@ from pathlib import Path
 
 from playwright.async_api import async_playwright
 
-SRC = 'https://raw.githubusercontent.com/JinDevLab/msv-helper/main/bookmarklet.js'
-LOCAL = Path(__file__).resolve().parent.parent / 'bookmarklet.js'
+# 넣을 코드. 페이지가 새로 열릴 때마다 다시 읽으므로, 파일을 고치면 새로고침만으로 반영된다.
+CODE = Path(__file__).resolve().parent.parent / 'py-bookmarklet.js'
 PORT = 9333
 PROFILE = Path(os.environ['LOCALAPPDATA']) / 'msv-helper' / 'chrome-profile'
 START = 'https://search.shopping.naver.com/'
-# 패널을 넣을 페이지. 패널이 띄운 iframe 안에서 다시 검색하면 바깥 페이지는 그대로라 한 번만 넣는다.
-TARGET = re.compile(r'^https://search\.shopping\.naver\.com/search/')
+# 코드를 넣을 페이지. 검색 페이지에는 패널을 띄우고, NPCS(/catalog)에서는 묶어보기만 끈다.
+# 필터를 누르면 네이버는 페이지를 새로 열지 않고 화면만 바꾸므로, 그때는 넣은 패널이 그대로 남는다.
+TARGET = re.compile(r'^https://search\.shopping\.naver\.com/(search/|catalog)')
 CHROMES = [
     Path(os.environ.get('LOCALAPPDATA', '')) / 'Google/Chrome/Application/chrome.exe',
     Path(os.environ.get('PROGRAMFILES', '')) / 'Google/Chrome/Application/chrome.exe',
@@ -61,17 +62,8 @@ def launch_chrome(chrome):
     sys.exit('Chrome 디버그 포트가 열리지 않았어. 같은 프로필로 이미 띄운 Chrome이 있으면 닫고 다시 실행해.')
 
 
-def read_code(local):
-    # 로더와 같이 원격 main을 받는다. raw.githubusercontent.com은 5분 캐시라 푸시 뒤 반영까지 5분쯤 걸린다.
-    if local:
-        return LOCAL.read_text(encoding='utf-8')
-    with urllib.request.urlopen(SRC, timeout=10) as res:
-        return res.read().decode('utf-8')
-
-
 async def main():
     parser = argparse.ArgumentParser(description='네이버 가격비교 검색 페이지에 msv-helper 패널을 자동으로 띄운다.')
-    parser.add_argument('--local', action='store_true', help='원격 대신 이 저장소의 bookmarklet.js를 쓴다')
     parser.add_argument('--chrome', type=Path, help='chrome.exe 경로')
     args = parser.parse_args()
 
@@ -89,12 +81,12 @@ async def main():
             if not TARGET.match(page.url):
                 return
             try:
-                code = await asyncio.to_thread(read_code, args.local)
-                # 로더처럼 new Function으로 실행한다. 받은 코드가 로더 쪽 변수와 섞이지 않는다.
+                code = CODE.read_text(encoding='utf-8')
+                # 북마클릿 로더처럼 new Function으로 실행한다. 넣은 코드가 evaluate 쪽 변수와 섞이지 않는다.
                 await page.evaluate('(code) => new Function(code)()', code)
-                print('패널 넣음:', page.url[:80])
+                print('코드 넣음:', page.url[:80])
             except Exception as err:
-                print('패널을 넣지 못함:', err)
+                print('코드를 넣지 못함:', err)
 
         def watch(page):
             # load는 바깥 페이지가 새로 열릴 때만 온다. iframe 안의 이동에는 오지 않는다.
