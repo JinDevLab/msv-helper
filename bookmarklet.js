@@ -2,6 +2,7 @@
 // 고친 뒤에는 node scripts/build-oneline.js로 한 줄 버전을 다시 만든다.
 (() => {
   const PANEL_ID = 'msv-helper-panel';
+  const FRAME_ID = 'msv-helper-frame';
 
   // 상품타입 드롭다운의 제외 항목. value는 항목 data-shp-contents-dtl의 filter_value_id다.
   const EXCLUDES = [
@@ -10,17 +11,53 @@
     { label: '렌탈', value: 'exrental' },
   ];
 
-  // fo=true가 없으면 붙여서 다시 열고 끝낸다. 다시 열린 페이지에서 북마클릿을 한 번 더 누른다.
+  // fo=true가 없으면 붙인 주소를, 있으면 null을 돌려준다.
   // 검색어 인코딩을 그대로 두려고 URLSearchParams 대신 문자열로 다룬다.
-  const pairs = location.search.replace(/^\?/, '').split('&').filter(Boolean);
-  if (!pairs.includes('fo=true')) {
+  const withFo = (loc) => {
+    const pairs = loc.search.replace(/^\?/, '').split('&').filter(Boolean);
+    if (pairs.includes('fo=true')) return null;
     const rest = pairs.filter((p) => p.split('=')[0] !== 'fo');
-    location.href = location.pathname + '?' + rest.concat('fo=true').join('&') + location.hash;
-    return;
-  }
+    return loc.pathname + '?' + rest.concat('fo=true').join('&') + loc.hash;
+  };
 
-  const old = document.getElementById(PANEL_ID);
-  if (old) old.remove();
+  // 한 번만 누르면 되도록 지금 페이지 위에 같은 사이트를 iframe으로 띄우고, 패널은 바깥 페이지에 둔다.
+  // iframe 안에서 다시 검색해도 패널은 남는다. 네이버는 X-Frame-Options와 CSP가 없어 iframe이 열린다.
+  const oldFrame = document.getElementById(FRAME_ID);
+  const start = new URL(oldFrame ? oldFrame.contentWindow.location.href : location.href);
+  if (oldFrame) oldFrame.remove();
+  const oldPanel = document.getElementById(PANEL_ID);
+  if (oldPanel) oldPanel.remove();
+
+  const frame = document.createElement('iframe');
+  frame.id = FRAME_ID;
+  frame.src = withFo(start) || start.pathname + start.search + start.hash;
+  frame.style.cssText = 'position:fixed;top:0;left:0;width:100vw;height:100vh;border:0;margin:0;z-index:2147483646;background:#fff';
+  document.documentElement.style.overflow = 'hidden';
+  document.body.appendChild(frame);
+  const win = () => frame.contentWindow;
+  const doc = () => frame.contentDocument;
+
+  // iframe 주소를 바깥 주소창에 맞추고, 새로 검색해서 fo=true가 빠지면 다시 붙인다.
+  const sync = setInterval(() => {
+    if (!frame.isConnected) {
+      clearInterval(sync);
+      return;
+    }
+    let loc;
+    try {
+      loc = win().location;
+      if (loc.href === 'about:blank') return;
+    } catch (err) {
+      // 다른 사이트로 나가면 읽을 수 없다.
+      return;
+    }
+    const next = loc.pathname === '/search/all' && withFo(loc);
+    if (next) {
+      loc.replace(next);
+    } else if (location.href !== loc.href) {
+      history.replaceState(null, '', loc.href);
+    }
+  }, 500);
 
   const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
   const waitFor = async (check, timeout) => {
@@ -33,9 +70,9 @@
   };
 
   // 드롭다운의 토글과 항목은 모두 a[data-shp-area-id="pdtype"]이고, 항목에만 data-shp-contents-dtl이 있다.
-  const findToggle = () => document.querySelector('a[data-shp-area-id="pdtype"]:not([data-shp-contents-dtl])');
+  const findToggle = () => doc().querySelector('a[data-shp-area-id="pdtype"]:not([data-shp-contents-dtl])');
   const findOption = (value) => {
-    const links = document.querySelectorAll('a[data-shp-area-id="pdtype"][data-shp-contents-dtl]');
+    const links = doc().querySelectorAll('a[data-shp-area-id="pdtype"][data-shp-contents-dtl]');
     for (const link of links) {
       try {
         const items = JSON.parse(link.getAttribute('data-shp-contents-dtl'));
@@ -55,14 +92,14 @@
   const clickExclude = async (target) => {
     const option = findOption(target.value);
     if (!option) return target.label + ': 이 검색어에는 없음';
-    const before = location.href + '|' + toggleText();
+    const before = win().location.href + '|' + toggleText();
     const toggle = findToggle();
     if (toggle) {
       toggle.click();
       await sleep(300);
     }
     option.click();
-    const changed = await waitFor(() => location.href + '|' + toggleText() !== before, 5000);
+    const changed = await waitFor(() => win().location.href + '|' + toggleText() !== before, 5000);
     if (!changed) return target.label + ': 눌렀지만 변화 없음';
     // 결과 목록이 다시 그려질 시간을 준다.
     await sleep(1500);
@@ -80,7 +117,7 @@
       return null;
     }
   };
-  const mallItems = () => Array.from(document.querySelectorAll('li[data-shp-area-id="shop"][data-shp-contents-dtl]'));
+  const mallItems = () => Array.from(doc().querySelectorAll('li[data-shp-area-id="shop"][data-shp-contents-dtl]'));
   const findMall = (mall) => mallItems().find((li) => filterValue(li) === mall.value || li.getAttribute('data-shp-contents-id') === mall.label);
   const isChecked = (li) => {
     const input = li && li.querySelector('input[type="checkbox"]');
@@ -90,14 +127,14 @@
   const clickMall = (li) => (li.querySelector('label') || li).click();
 
   const selectOnlyMall = async (mall) => {
-    const toggle = document.querySelector('a[data-shp-area-id="shoptype"]');
+    const toggle = doc().querySelector('a[data-shp-area-id="shoptype"]');
     if (!toggle) return mall.label + ': 쇼핑몰선택이 없는 화면';
     const layer = toggle.parentElement.querySelector('[class*="subFilter_layer_mall"]');
     if (!layer || !layer.classList.contains('open')) {
       toggle.click();
     }
     if (!(await waitFor(() => findMall(mall), 3000))) {
-      const tab = document.querySelector('li[data-shp-area-id="shoptab"][data-shp-contents-type="오픈마켓/종합몰"] a');
+      const tab = doc().querySelector('li[data-shp-area-id="shoptab"][data-shp-contents-type="오픈마켓/종합몰"] a');
       if (tab) {
         tab.click();
         await waitFor(() => findMall(mall), 3000);
@@ -117,11 +154,11 @@
       await sleep(300);
     }
 
-    const save = document.querySelector('a[data-shp-area-id="shoptypesave"]');
+    const save = doc().querySelector('a[data-shp-area-id="shoptypesave"]');
     if (!save) return mall.label + ': 저장 버튼이 없음';
-    const before = location.href;
+    const before = win().location.href;
     save.click();
-    if (!(await waitFor(() => location.href !== before, 5000))) return mall.label + ': 저장했지만 주소 변화 없음';
+    if (!(await waitFor(() => win().location.href !== before, 5000))) return mall.label + ': 저장했지만 주소 변화 없음';
     await sleep(1500);
     return mall.label + '만 선택함';
   };
@@ -129,7 +166,7 @@
 
   // 판매처 탭 "전체" 옆 숫자. 쿠팡만 선택하기 전에는 전체 수, 뒤에는 쿠팡 수다.
   const readTotal = () => {
-    const tabs = Array.from(document.querySelectorAll('li[data-shp-area-id="tab"][data-shp-contents-dtl]'));
+    const tabs = Array.from(doc().querySelectorAll('li[data-shp-area-id="tab"][data-shp-contents-dtl]'));
     const total = tabs.find((li) => filterValue(li) === 'total');
     const num = total && total.querySelector('[class*="subFilter_num"]');
     return num ? num.textContent.trim() : null;
@@ -160,7 +197,20 @@
   header.appendChild(make('strong', 'MSV · n total', 'font-size:14px'));
   const close = make('button', '×', 'border:0;background:none;padding:0 2px;font-size:18px;line-height:1;color:#999;cursor:pointer');
   close.title = '닫기';
-  close.onclick = () => panel.remove();
+  // 닫으면 iframe에서 보던 주소를 바깥 페이지로 그대로 연다.
+  close.onclick = () => {
+    clearInterval(sync);
+    let href = null;
+    try {
+      href = win().location.href;
+    } catch (err) {
+      // 다른 사이트로 나갔으면 원래 페이지로 돌아간다.
+    }
+    panel.remove();
+    frame.remove();
+    document.documentElement.style.overflow = '';
+    if (href && href !== 'about:blank') location.href = href;
+  };
   header.appendChild(close);
   panel.appendChild(header);
 
@@ -218,7 +268,7 @@
   // 칸반(스프레드시트)에 붙일 한 줄: 검색어, URL, 전체 수, 쿠팡 수를 탭으로 나눈다.
   // URL은 쿠팡을 고르기 전 "전체" 상태의 주소다. 숫자는 쉼표를 빼서 숫자 칸으로 들어가게 한다.
   const searchQuery = () => {
-    const pair = location.search.replace(/^\?/, '').split('&').find((p) => p.split('=')[0] === 'query');
+    const pair = win().location.search.replace(/^\?/, '').split('&').find((p) => p.split('=')[0] === 'query');
     return pair ? decodeURIComponent(pair.slice(6).replace(/\+/g, ' ')) : '';
   };
   const toNumber = (text) => (text || '').replace(/[^0-9]/g, '');
@@ -236,7 +286,7 @@
   let row = '';
   step3.appendChild(action(make('button', '쿠팡만 선택', PRIMARY), async () => {
     const query = searchQuery();
-    const url = location.href;
+    const url = win().location.href;
     const total = readTotal();
     const result = await selectOnlyMall(COUPANG);
     if (!result.endsWith('만 선택함')) return [result];
@@ -270,7 +320,7 @@
   const diag = make('button', '진단 복사', LINK);
   diag.onclick = () => {
     const text = JSON.stringify({
-      url: location.href,
+      url: win().location.href,
       toggle: toggleText(),
       options: EXCLUDES.map((t) => t.value + ':' + !!findOption(t.value)),
       total: readTotal(),
@@ -284,15 +334,15 @@
   dump.onclick = async () => {
     dump.disabled = true;
     dump.textContent = '덤프 중...';
-    const toggle = document.querySelector('a[data-shp-area-id="shoptype"]');
-    const meta = { url: location.href, open: 'shoptype', found: !!toggle };
-    const before = document.documentElement.outerHTML;
+    const toggle = doc().querySelector('a[data-shp-area-id="shoptype"]');
+    const meta = { url: win().location.href, open: 'shoptype', found: !!toggle };
+    const before = doc().documentElement.outerHTML;
     if (toggle) {
       toggle.click();
       await sleep(2500);
     }
-    meta.urlAfterOpen = location.href;
-    const after = document.documentElement.outerHTML;
+    meta.urlAfterOpen = win().location.href;
+    const after = doc().documentElement.outerHTML;
     const file = ['<!--META ' + JSON.stringify(meta) + ' -->', '<!--BEFORE-->', before, '<!--AFTER-->', after].join('\n');
     const link = document.createElement('a');
     link.href = URL.createObjectURL(new Blob([file], { type: 'text/html' }));
