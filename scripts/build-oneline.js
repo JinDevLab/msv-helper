@@ -30,11 +30,13 @@ if (problems.length) {
 }
 
 // 브라우저는 javascript: URL을 실행하기 전에 퍼센트 인코딩을 푼다.
-// 그래서 %와 URL 조각으로 잘릴 수 있는 #만 인코딩한다.
+// 그래서 %와 URL 조각으로 잘릴 수 있는 #을 인코딩한다.
+// 한글 같은 비ASCII 문자도 인코딩해 ASCII만 남긴다. 복사 도구의 인코딩에 따라 한글이 깨져 북마크 URL이 망가졌다.
 const encoded = lines
   .join(' ')
   .replace(/%/g, '%25')
-  .replace(/#/g, '%23');
+  .replace(/#/g, '%23')
+  .replace(/[^\x20-\x7e]+/g, encodeURIComponent);
 const oneline = 'javascript:' + encoded;
 
 // 브라우저가 푸는 것과 같은 방식으로 풀어서 문법이 맞는지 확인한다.
