@@ -13,6 +13,7 @@
 - 한 줄 버전 만들기: `node scripts/build-oneline.js`. `bookmarklet-oneline.js`와 `loader-oneline.js`를 만들고, 풀어서 문법 검사까지 한다.
 - 실행: 북마크를 새로 만들고 URL 칸에 `loader-oneline.js` 내용을 그대로 붙여 넣는다. 대상 페이지에서 그 북마크를 누른다. 로더는 한 번만 붙이면 된다.
 - 푸시 전 로컬 코드 확인: 로더는 `main`을 받으므로, 작업 중인 코드는 `bookmarklet-oneline.js`를 북마크로 붙여 실행해 본다.
+- 파이썬 로더(시험 중): 처음 한 번 `python -m pip install -r python/requirements.txt`를 하고, `python python/msv_helper.py`(또는 `python/msv-helper.bat`)를 실행한다. 작업 중인 코드는 `--local`로 확인한다.
 - 합치기 전 검사: `node --check bookmarklet.js`와 `node scripts/build-oneline.js`. 뒤 명령 후 `git status`에 두 한 줄 파일의 변경이 없어야 한다.
 
 ## 문서
