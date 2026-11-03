@@ -230,23 +230,48 @@
     if (paramOn(target.value)) return 'done';
     return findOption(target.value) ? 'ready' : 'none';
   };
-  const CHIP = 'padding:2px 7px;border-radius:10px;font-size:11px;';
+  const CHIP = 'padding:2px 7px;border-radius:10px;font:11px sans-serif;';
   const CHIP_STYLES = {
-    done: 'background:' + GREEN + ';color:#fff;border:1px solid ' + GREEN,
-    ready: 'background:#fff;color:#555;border:1px solid #cfd3d8',
-    none: 'background:#fff;color:' + MUTED + ';border:1px solid #eceef1;text-decoration:line-through',
+    done: 'background:' + GREEN + ';color:#fff;border:1px solid ' + GREEN + ';cursor:pointer',
+    ready: 'background:#fff;color:#555;border:1px solid #cfd3d8;cursor:pointer',
+    none: 'background:#fff;color:' + MUTED + ';border:1px solid #eceef1;text-decoration:line-through;cursor:default',
   };
+
+  // 쿠팡만 선택하고, 끝나면 작업이 끝난 것이므로 스프레드시트용 한 줄을 바로 복사한다.
+  const pickCoupang = async () => {
+    const before = { query: searchQuery(), url: win().location.href, total: readTotal() };
+    const result = await selectOnlyMall(COUPANG);
+    if (!result.endsWith('만 선택함')) return [result];
+    saved = before;
+    render();
+    await copyText(sheetRow(), '시트 한 줄');
+    return [result, status.textContent];
+  };
+  const coupangOn = () => !!saved || win().location.search.replace(/^\?/, '').split('&').includes('mall=' + COUPANG.value);
+
+  // 칩을 누르면 그 필터를 켜거나 끈다. 이 검색어에 없는 항목은 누를 수 없다.
   const chips = make('div', '', 'display:flex;flex-wrap:wrap;gap:4px;margin-top:8px');
   body.appendChild(chips);
   const chipList = [];
-  const addChip = (label, getState) => {
-    const chip = make('span', label, CHIP);
+  const addChip = (label, getState, turnOn, turnOff) => {
+    const chip = make('button', label, CHIP);
+    chip.onclick = () => run(getState() === 'done' ? turnOff : turnOn);
     chips.appendChild(chip);
     chipList.push({ chip, getState });
   };
-  addChip('fo', () => (paramOn('fo') ? 'done' : 'ready'));
-  for (const target of EXCLUDES) addChip(target.label.slice(0, 2), () => excludeState(target));
-  addChip('쿠팡', () => (saved ? 'done' : 'ready'));
+  const apply = async (done, changes) => [(await openWith(changes)) ? done : done + ': 새 페이지에서 전체 수를 못 읽음'];
+  addChip('fo', () => (paramOn('fo') ? 'done' : 'ready'),
+    () => apply('fo 켬', { fo: 'true' }),
+    () => apply('fo 끔', { fo: null }));
+  for (const target of EXCLUDES) {
+    addChip(target.label.slice(0, 2), () => excludeState(target),
+      () => apply(target.label + ' 제외 켬', { [target.value]: 'true', [target.show]: null }),
+      () => apply(target.label + ' 제외 끔', { [target.value]: null }));
+  }
+  addChip('쿠팡', () => (coupangOn() ? 'done' : 'ready'), pickCoupang, () => {
+    saved = null;
+    return apply('쿠팡 선택 끔', { mall: null });
+  });
 
   const actions = make('div', '', 'display:flex;gap:6px;margin-top:8px');
   body.appendChild(actions);
@@ -254,16 +279,7 @@
   const excludeBtn = make('button', 'fo + 모두 제외', BTN);
   excludeBtn.onclick = () => run(async () => [await exclude(EXCLUDES.filter((target) => excludeState(target) === 'ready'))]);
   const coupangBtn = make('button', '쿠팡 선택', BTN);
-  coupangBtn.onclick = () => run(async () => {
-    const before = { query: searchQuery(), url: win().location.href, total: readTotal() };
-    const result = await selectOnlyMall(COUPANG);
-    if (!result.endsWith('만 선택함')) return [result];
-    saved = before;
-    render();
-    // 쿠팡을 고르면 작업이 끝난 것이므로 스프레드시트용 한 줄을 바로 복사한다.
-    await copyText(sheetRow(), '시트 한 줄');
-    return [result, status.textContent];
-  });
+  coupangBtn.onclick = () => run(pickCoupang);
   actions.appendChild(excludeBtn);
   actions.appendChild(coupangBtn);
 
@@ -357,9 +373,13 @@
     if (lastQuery !== null && query !== lastQuery) saved = null;
     lastQuery = query;
 
-    for (const { chip, getState } of chipList) chip.style.cssText = CHIP + CHIP_STYLES[getState()];
+    for (const { chip, getState } of chipList) {
+      const state = getState();
+      chip.style.cssText = CHIP + CHIP_STYLES[state];
+      chip.disabled = state === 'none' || busy;
+    }
     setEnabled(excludeBtn, !paramOn('fo') || EXCLUDES.some((target) => excludeState(target) === 'ready'));
-    setEnabled(coupangBtn, !saved && !!readTotal());
+    setEnabled(coupangBtn, !coupangOn() && !!readTotal());
 
     totalLabel.textContent = totalNow() || '-';
     coupangLabel.textContent = coupangNow() || '-';
