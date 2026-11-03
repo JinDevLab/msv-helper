@@ -140,7 +140,33 @@
     navigator.clipboard.writeText(text).then(() => { diag.textContent = '복사함'; }, () => { prompt('복사해서 보내줘', text); });
   };
 
+  // 개발용: 쇼핑몰선택을 열기 전과 연 뒤의 전체 HTML을 msv-dom-shoptype.html로 내려받는다.
+  const dump = document.createElement('button');
+  dump.textContent = 'DOM 덤프';
+  dump.style.cssText = diag.style.cssText + ';margin-left:4px';
+  dump.onclick = async () => {
+    dump.disabled = true;
+    dump.textContent = '덤프 중...';
+    const toggle = document.querySelector('a[data-shp-area-id="shoptype"]');
+    const meta = { url: location.href, open: 'shoptype', found: !!toggle };
+    const before = document.documentElement.outerHTML;
+    if (toggle) {
+      toggle.click();
+      await sleep(2500);
+    }
+    meta.urlAfterOpen = location.href;
+    const after = document.documentElement.outerHTML;
+    const file = ['<!--META ' + JSON.stringify(meta) + ' -->', '<!--BEFORE-->', before, '<!--AFTER-->', after].join('\n');
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(new Blob([file], { type: 'text/html' }));
+    link.download = 'msv-dom-shoptype.html';
+    link.click();
+    dump.textContent = '덤프 저장함';
+    dump.disabled = false;
+  };
+
   panel.appendChild(status);
   panel.appendChild(diag);
+  panel.appendChild(dump);
   document.body.appendChild(panel);
 })();
