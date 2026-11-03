@@ -237,6 +237,17 @@
     ' .st:empty{display:none}',
     ' .ft{display:flex;justify-content:flex-end;gap:8px;margin-top:4px}',
     ' .ft button{font-size:11px;color:#9aa0a6}',
+    ' .det{position:fixed;right:15px;bottom:15px;min-width:150px;background:rgba(33,33,33,.95);color:#fff;border-radius:6px;box-shadow:0 6px 20px rgba(0,0,0,.3)}',
+    ' .det-hd{display:flex;align-items:center;width:100%;padding:7px 10px;font-weight:700}',
+    ' .det-hd span{margin-left:auto;padding-left:12px;font-size:10px;color:#bbb}',
+    ' .det-list{padding:0 10px 8px}',
+    ' .det:not(.open) .det-list{display:none}',
+    ' .det-row{display:flex;justify-content:space-between;gap:16px;width:100%;padding:2px 0;color:#8a8a8a}',
+    ' .det-row:disabled{opacity:1}',
+    ' .det-row b{font-size:10px}',
+    ' .det-row.on{color:#fff;font-weight:700}',
+    ' .det-row.on b{color:#00ff7f}',
+    ' .det-row.on:hover{text-decoration:underline}',
   ].map((rule) => '#' + PANEL_ID + rule).join('');
 
   const panel = make('div');
@@ -454,6 +465,70 @@
   footer.appendChild(dump);
   body.appendChild(footer);
 
+  // 감지기: n total 작업 중에 다른 유통사 상품이 결과에 섞여 있으면 알려준다. 다른 작업에서 놓친 것을 찾는 마지막 확인용이다.
+  // 상품 카드 링크의 data-shp-contents-provider-id가 몰 번호다. 지금 보이는 페이지의 상품만 본다.
+  // 패널 안에 두지만 position:fixed라 화면 오른쪽 아래에 따로 뜬다.
+  const WATCH = [
+    { name: '이마트', ids: ['4535661', '4531621', '4541160'] },
+    { name: '롯데마트', ids: ['12317296'] },
+    { name: '컬리', ids: ['9080714'] },
+    { name: '올리브영', ids: ['197658'] },
+    { name: '지그재그', ids: ['9115904'] },
+    { name: '오늘의집', ids: ['7696354'] },
+    { name: '펫프렌즈', ids: ['1005950'] },
+  ];
+  const productLinks = (id) => doc().querySelectorAll('[class^="product_item"] a[data-shp-contents-provider-id' + (id ? '="' + id + '"' : '') + ']');
+  const detector = make('div', '', 'det');
+  const detHead = make('button', '감지기', 'det-hd');
+  const arrow = make('span', '▼');
+  detHead.appendChild(arrow);
+  const detList = make('div', '', 'det-list');
+  detector.appendChild(detHead);
+  detector.appendChild(detList);
+  panel.appendChild(detector);
+
+  // ON인 쇼핑몰을 누르면 그 몰의 첫 상품으로 스크롤하고 1.2초 동안 노랗게 칠한다.
+  const detRows = WATCH.map((mall) => {
+    const row = make('button', '', 'det-row');
+    row.appendChild(make('span', mall.name));
+    const state = make('b');
+    row.appendChild(state);
+    row.onclick = () => {
+      const link = mall.ids.map((id) => productLinks(id)[0]).find(Boolean);
+      if (!link) return;
+      const item = link.closest('[class^="product_item"]') || link;
+      item.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      const old = item.style.background;
+      item.style.background = 'rgba(255,235,59,.25)';
+      setTimeout(() => { item.style.background = old; }, 1200);
+    };
+    detList.appendChild(row);
+    return { mall, row, state };
+  });
+
+  let detOpen = false;
+  let anyBefore = false;
+  const setDetOpen = (open) => {
+    detOpen = open;
+    detector.classList.toggle('open', open);
+    arrow.textContent = open ? '▲' : '▼';
+  };
+  detHead.onclick = () => setDetOpen(!detOpen);
+  const detect = () => {
+    const found = new Set(Array.from(productLinks(), (link) => link.getAttribute('data-shp-contents-provider-id')));
+    let any = false;
+    for (const { mall, row, state } of detRows) {
+      const on = mall.ids.some((id) => found.has(id));
+      any = any || on;
+      row.classList.toggle('on', on);
+      row.disabled = !on;
+      state.textContent = on ? 'ON' : 'OFF';
+    }
+    // 하나라도 ON이 되면 펼치고, 모두 OFF가 되면 접는다. 그 사이에는 손으로 접고 펼 수 있다.
+    if (any !== anyBefore) setDetOpen(any);
+    anyBefore = any;
+  };
+
   // 상태와 버튼을 지금 페이지에 맞춘다. iframe 안에서 페이지가 바뀌므로 주기적으로 부른다.
   function render() {
     let loaded = true;
@@ -479,6 +554,7 @@
     urlCell.textContent = readable(urlNow());
     totalCell.textContent = totalNow() || '-';
     coupangCell.textContent = coupangNow() || '-';
+    detect();
   }
 
   const ticker = setInterval(() => {
