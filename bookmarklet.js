@@ -4,11 +4,12 @@
   const PANEL_ID = 'msv-helper-panel';
   const FRAME_ID = 'msv-helper-frame';
 
-  // 상품타입 드롭다운의 제외 항목. value는 항목 data-shp-contents-dtl의 filter_value_id다.
+  // 상품타입 드롭다운의 제외 항목. value는 항목 data-shp-contents-dtl의 filter_value_id이자 주소 파라미터 이름이고,
+  // show는 반대쪽(보기) 파라미터 이름이다.
   const EXCLUDES = [
-    { label: '해외직구', value: 'exagency' },
-    { label: '중고', value: 'exused' },
-    { label: '렌탈', value: 'exrental' },
+    { label: '해외직구', value: 'exagency', show: 'agency' },
+    { label: '중고', value: 'exused', show: 'used' },
+    { label: '렌탈', value: 'exrental', show: 'rental' },
   ];
 
   // fo=true가 없으면 붙인 주소를, 있으면 null을 돌려준다.
@@ -88,24 +89,6 @@
     return toggle ? toggle.textContent.trim() : '';
   };
 
-  // 사람이 하듯 드롭다운을 열고 항목을 누른 뒤, 주소나 토글 글자가 바뀔 때까지 기다린다.
-  const clickExclude = async (target) => {
-    const option = findOption(target.value);
-    if (!option) return target.label + ': 이 검색어에는 없음';
-    const before = win().location.href + '|' + toggleText();
-    const toggle = findToggle();
-    if (toggle) {
-      toggle.click();
-      await sleep(300);
-    }
-    option.click();
-    const changed = await waitFor(() => win().location.href + '|' + toggleText() !== before, 5000);
-    if (!changed) return target.label + ': 눌렀지만 변화 없음';
-    // 결과 목록이 다시 그려질 시간을 준다.
-    await sleep(1500);
-    return target.label + ': 적용 → ' + (toggleText() || '?');
-  };
-
   // 쇼핑몰선택 결과는 주소의 mall=몰 번호로 남는다. 쿠팡은 613264다.
   const COUPANG = { label: '쿠팡', value: '613264' };
   const filterValue = (el) => {
@@ -117,21 +100,41 @@
     }
   };
 
-  // 저장 버튼을 스크립트로 누르면 네이버가 실제 마우스 클릭이 아니라고 보고 검색 요청을 418로 막는다.
-  // 그래서 mall만 바꾼 주소로 iframe을 새로 연다. 공유받은 링크를 여는 것과 같은 일반 페이지 로드다.
-  const selectOnlyMall = async (mall) => {
+  // 필터를 스크립트로 클릭하면 네이버가 실제 마우스 클릭이 아니라고 보고 검색 요청을 418로 막는다.
+  // 그래서 파라미터만 바꾼 주소로 iframe을 새로 연다. 공유받은 링크를 여는 것과 같은 일반 페이지 로드다.
+  // changes는 { 이름: 값 }이고, 값이 null이면 그 파라미터를 뺀다.
+  const openWith = async (changes) => {
     const loc = win().location;
-    const pairs = loc.search.replace(/^\?/, '').split('&').filter((p) => p && p.split('=')[0] !== 'mall');
+    const names = Object.keys(changes);
+    const pairs = loc.search.replace(/^\?/, '').split('&').filter((p) => p && !names.includes(p.split('=')[0]));
+    for (const name of names) {
+      if (changes[name] !== null) pairs.push(name + '=' + changes[name]);
+    }
     const before = doc();
-    loc.href = loc.pathname + '?' + pairs.concat('mall=' + mall.value).join('&') + loc.hash;
-    const loaded = await waitFor(() => {
+    loc.href = loc.pathname + '?' + pairs.join('&') + loc.hash;
+    return waitFor(() => {
       try {
         return doc() !== before && doc().readyState === 'complete' && !!readTotal();
       } catch (err) {
         return false;
       }
     }, 15000);
-    if (!loaded) return mall.label + ': 새 페이지에서 전체 수를 못 읽음';
+  };
+
+  // 여러 개를 한 번에 제외해도 드롭다운에 "해외직구제외,중고제외"처럼 같이 적용된다(실제 네이버에서 확인).
+  const exclude = async (targets) => {
+    const changes = {};
+    for (const target of targets) {
+      changes[target.value] = 'true';
+      changes[target.show] = null;
+    }
+    const names = targets.map((t) => t.label).join('·');
+    if (!(await openWith(changes))) return names + ': 새 페이지에서 전체 수를 못 읽음';
+    return names + ' 제외함 → ' + (toggleText() || '?');
+  };
+
+  const selectOnlyMall = async (mall) => {
+    if (!(await openWith({ mall: mall.value }))) return mall.label + ': 새 페이지에서 전체 수를 못 읽음';
     return mall.label + '만 선택함';
   };
 
@@ -270,21 +273,14 @@
     return findOption(target.value) ? 'ready' : 'none';
   };
   for (const target of EXCLUDES) {
-    addFilterRow(ICONS[target.value], NAMES[target.value], '제외', () => excludeState(target), async () => [await clickExclude(target)]);
+    addFilterRow(ICONS[target.value], NAMES[target.value], '제외', () => excludeState(target), async () => [await exclude([target])]);
   }
-  // 셋 중 아직 적용 안 된 것만 차례로 누른다. 누를 때마다 DOM이 다시 그려지므로 매번 새로 확인한다.
+  // 셋 중 이 검색어에 있고 아직 적용 안 된 것만 한 번에 제외한다.
   addFilterRow('🚫', '모두 제외', '제외', () => {
     const states = EXCLUDES.map(excludeState);
     if (states.includes('ready')) return 'ready';
     return states.includes('done') ? 'done' : 'none';
-  }, async () => {
-    const lines = [];
-    for (const target of EXCLUDES) {
-      if (excludeState(target) === 'ready') lines.push(await clickExclude(target));
-    }
-    lines.push('지금 상품타입: ' + (toggleText() || '?'));
-    return lines;
-  });
+  }, async () => [await exclude(EXCLUDES.filter((target) => excludeState(target) === 'ready'))]);
   addFilterRow('🚀', '쿠팡 필터', '선택', () => {
     if (saved) return 'done';
     return doc().querySelector('a[data-shp-area-id="shoptype"]') ? 'ready' : 'none';
