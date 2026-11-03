@@ -106,8 +106,7 @@
     return target.label + ': 적용 → ' + (toggleText() || '?');
   };
 
-  // 쇼핑몰선택 레이어. 열 때 목록을 불러오고, 열리면 레이어에 open 클래스가 붙는다.
-  // 목록 항목은 li[data-shp-area-id="shop"]이고 data-shp-contents-dtl의 filter_value_id가 몰 번호다.
+  // 쇼핑몰선택 결과는 주소의 mall=몰 번호로 남는다. 쿠팡은 613264다.
   const COUPANG = { label: '쿠팡', value: '613264' };
   const filterValue = (el) => {
     try {
@@ -117,52 +116,24 @@
       return null;
     }
   };
-  const mallItems = () => Array.from(doc().querySelectorAll('li[data-shp-area-id="shop"][data-shp-contents-dtl]'));
-  const findMall = (mall) => mallItems().find((li) => filterValue(li) === mall.value || li.getAttribute('data-shp-contents-id') === mall.label);
-  const isChecked = (li) => {
-    const input = li && li.querySelector('input[type="checkbox"]');
-    return !!(input && input.checked);
-  };
-  // 사람이 누르는 곳인 label을 누른다.
-  const clickMall = (li) => (li.querySelector('label') || li).click();
 
+  // 저장 버튼을 스크립트로 누르면 네이버가 실제 마우스 클릭이 아니라고 보고 검색 요청을 418로 막는다.
+  // 그래서 mall만 바꾼 주소로 iframe을 새로 연다. 공유받은 링크를 여는 것과 같은 일반 페이지 로드다.
   const selectOnlyMall = async (mall) => {
-    const toggle = doc().querySelector('a[data-shp-area-id="shoptype"]');
-    if (!toggle) return mall.label + ': 쇼핑몰선택이 없는 화면';
-    const layer = toggle.parentElement.querySelector('[class*="subFilter_layer_mall"]');
-    if (!layer || !layer.classList.contains('open')) {
-      toggle.click();
-    }
-    if (!(await waitFor(() => findMall(mall), 3000))) {
-      const tab = doc().querySelector('li[data-shp-area-id="shoptab"][data-shp-contents-type="오픈마켓/종합몰"] a');
-      if (tab) {
-        tab.click();
-        await waitFor(() => findMall(mall), 3000);
+    const loc = win().location;
+    const pairs = loc.search.replace(/^\?/, '').split('&').filter((p) => p && p.split('=')[0] !== 'mall');
+    const before = doc();
+    loc.href = loc.pathname + '?' + pairs.concat('mall=' + mall.value).join('&') + loc.hash;
+    const loaded = await waitFor(() => {
+      try {
+        return doc() !== before && doc().readyState === 'complete' && !!readTotal();
+      } catch (err) {
+        return false;
       }
-    }
-    const target = findMall(mall);
-    if (!target) return mall.label + ': 쇼핑몰 목록에 없음';
-
-    for (const li of mallItems()) {
-      if (li !== target && isChecked(li)) {
-        clickMall(li);
-        await sleep(150);
-      }
-    }
-    if (!isChecked(target)) {
-      clickMall(target);
-      await sleep(300);
-    }
-
-    const save = doc().querySelector('a[data-shp-area-id="shoptypesave"]');
-    if (!save) return mall.label + ': 저장 버튼이 없음';
-    const before = win().location.href;
-    save.click();
-    if (!(await waitFor(() => win().location.href !== before, 5000))) return mall.label + ': 저장했지만 주소 변화 없음';
-    await sleep(1500);
+    }, 15000);
+    if (!loaded) return mall.label + ': 새 페이지에서 전체 수를 못 읽음';
     return mall.label + '만 선택함';
   };
-
 
   // 판매처 탭 "전체" 옆 숫자. 쿠팡만 선택하기 전에는 전체 수, 뒤에는 쿠팡 수다.
   const readTotal = () => {
