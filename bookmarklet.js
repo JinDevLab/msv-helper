@@ -126,51 +126,76 @@
     return mall.label + '만 선택함';
   };
 
-  const panel = document.createElement('div');
-  panel.id = PANEL_ID;
-  panel.style.cssText = [
-    'position:fixed', 'top:12px', 'right:12px', 'z-index:2147483647',
-    'width:220px', 'padding:10px', 'background:#fff', 'color:#222',
-    'border:1px solid #03c75a', 'border-radius:8px',
-    'box-shadow:0 4px 12px rgba(0,0,0,.2)', 'font:13px/1.4 sans-serif',
-  ].join(';');
 
-  const header = document.createElement('div');
-  header.style.cssText = 'display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;font-weight:bold';
-  header.textContent = 'MSV helper';
-  const close = document.createElement('button');
-  close.textContent = '×';
+  // 판매처 탭 "전체" 옆 숫자. 쿠팡만 선택하기 전에는 전체 수, 뒤에는 쿠팡 수다.
+  const readTotal = () => {
+    const tabs = Array.from(document.querySelectorAll('li[data-shp-area-id="tab"][data-shp-contents-dtl]'));
+    const total = tabs.find((li) => filterValue(li) === 'total');
+    const num = total && total.querySelector('[class*="subFilter_num"]');
+    return num ? num.textContent.trim() : null;
+  };
+
+  // 패널은 n total 작업 순서(docs/domain.md)대로 나눈다. 혼재 제거는 사람이 하므로 안내만 둔다.
+  const make = (tag, text, style) => {
+    const node = document.createElement(tag);
+    if (text) node.textContent = text;
+    if (style) node.style.cssText = style;
+    return node;
+  };
+  const GREEN = '#03c75a';
+  const PRIMARY = 'display:block;box-sizing:border-box;width:100%;padding:7px;border:0;border-radius:6px;'
+    + 'background:' + GREEN + ';color:#fff;font:bold 13px sans-serif;cursor:pointer';
+  const SMALL = 'flex:1;padding:5px 0;border:1px solid #e1e4e8;border-radius:6px;background:#f5f6f8;'
+    + 'color:#333;font:12px sans-serif;cursor:pointer';
+  const LINK = 'border:0;background:none;padding:0;margin-left:8px;color:#999;font:11px sans-serif;cursor:pointer';
+
+  const panel = make('div', '', [
+    'position:fixed', 'top:12px', 'right:12px', 'z-index:2147483647', 'width:236px',
+    'padding:12px', 'background:#fff', 'color:#222', 'border:1px solid #dfe3e8', 'border-radius:10px',
+    'box-shadow:0 6px 20px rgba(0,0,0,.15)', 'font:13px/1.4 sans-serif', 'text-align:left',
+  ].join(';'));
+  panel.id = PANEL_ID;
+
+  const header = make('div', '', 'display:flex;justify-content:space-between;align-items:center;margin-bottom:10px');
+  header.appendChild(make('strong', 'MSV · n total', 'font-size:14px'));
+  const close = make('button', '×', 'border:0;background:none;padding:0 2px;font-size:18px;line-height:1;color:#999;cursor:pointer');
   close.title = '닫기';
-  close.style.cssText = 'border:0;background:none;font-size:16px;cursor:pointer;color:#666';
   close.onclick = () => panel.remove();
   header.appendChild(close);
   panel.appendChild(header);
 
-  const status = document.createElement('div');
-  status.style.cssText = 'margin-top:8px;font-size:12px;color:#666;white-space:pre-line';
+  const step = (num, title) => {
+    const box = make('div', '', 'margin-top:10px');
+    const head = make('div', '', 'display:flex;align-items:center;margin-bottom:6px;font-weight:bold;font-size:12px;color:#444');
+    head.appendChild(make('span', String(num), 'display:inline-block;width:18px;height:18px;margin-right:6px;border-radius:50%;'
+      + 'background:' + GREEN + ';color:#fff;font-size:11px;line-height:18px;text-align:center'));
+    head.appendChild(document.createTextNode(title));
+    box.appendChild(head);
+    panel.appendChild(box);
+    return box;
+  };
 
-  const buttons = [];
-  const addButton = (text, run, primary) => {
-    const btn = document.createElement('button');
-    btn.textContent = text;
-    btn.style.cssText = 'display:block;box-sizing:border-box;width:100%;margin-top:4px;padding:6px;'
-      + 'border:1px solid ' + (primary ? '#03c75a' : '#ccc') + ';border-radius:4px;cursor:pointer;font:inherit;'
-      + 'background:' + (primary ? '#03c75a;color:#fff' : '#f7f7f7;color:#222');
+  const status = make('div', '', 'margin-top:10px;font-size:11px;color:#888;white-space:pre-line');
+
+  // 작업 중에는 모든 버튼을 막아 같은 동작이 겹치지 않게 한다.
+  const actions = [];
+  const action = (btn, run) => {
     btn.onclick = async () => {
-      buttons.forEach((b) => { b.disabled = true; });
+      actions.forEach((b) => { b.disabled = true; b.style.opacity = '.5'; });
       status.textContent = '처리 중...';
       try {
         status.textContent = (await run()).join('\n');
       } catch (err) {
         status.textContent = '오류: ' + err.message;
       }
-      buttons.forEach((b) => { b.disabled = false; });
+      actions.forEach((b) => { b.disabled = false; b.style.opacity = ''; });
     };
-    buttons.push(btn);
-    panel.appendChild(btn);
+    actions.push(btn);
+    return btn;
   };
 
-  addButton('해외직구·중고·렌탈 모두 제외', async () => {
+  const step1 = step(1, '해외직구·중고·렌탈 제외');
+  step1.appendChild(action(make('button', '모두 제외', PRIMARY), async () => {
     const results = [];
     for (const target of EXCLUDES) {
       results.push(await clickExclude(target));
@@ -178,30 +203,54 @@
     // 드롭다운이 하나만 고르는 방식이면 마지막 항목만 남으므로 최종 상태를 같이 보여준다.
     results.push('지금 상품타입: ' + (toggleText() || '?'));
     return results;
-  }, true);
+  }));
+  const singles = make('div', '', 'display:flex;gap:4px;margin-top:4px');
   for (const target of EXCLUDES) {
-    addButton(target.label + ' 제외', async () => [await clickExclude(target)]);
+    const btn = make('button', target.label, SMALL);
+    btn.title = target.label + '만 제외';
+    singles.appendChild(action(btn, async () => [await clickExclude(target)]));
   }
-  addButton('쿠팡만 선택', async () => [await selectOnlyMall(COUPANG)]);
+  step1.appendChild(singles);
+
+  const step2 = step(2, '혼재 제거');
+  step2.appendChild(make('div', '검색창에 -단어를 붙여 혼재를 뺀다.', 'font-size:12px;color:#666'));
+
+  const step3 = step(3, '전체 수 · 쿠팡 수');
+  const counts = make('div', '', 'display:none;margin-top:6px;padding:6px 8px;border-radius:6px;background:#f0faf4;font-size:12px');
+  step3.appendChild(action(make('button', '쿠팡만 선택', PRIMARY), async () => {
+    const total = readTotal();
+    const result = await selectOnlyMall(COUPANG);
+    if (!result.endsWith('만 선택함')) return [result];
+    counts.textContent = '';
+    counts.appendChild(document.createTextNode('전체 '));
+    counts.appendChild(make('b', total || '?'));
+    counts.appendChild(document.createTextNode(' · 쿠팡 '));
+    counts.appendChild(make('b', readTotal() || '?'));
+    counts.style.display = 'block';
+    return [result];
+  }));
+  step3.appendChild(counts);
+
+  panel.appendChild(status);
+
+  // 개발용 버튼은 맨 아래 작게 둔다.
+  const footer = make('div', '', 'margin-top:8px;text-align:right');
 
   // 결과가 이상하면 이 버튼으로 상태를 복사해 개발자에게 보낸다.
-  const diag = document.createElement('button');
-  diag.textContent = '진단 복사';
-  diag.style.cssText = 'margin-top:8px;padding:2px 6px;border:1px solid #ccc;border-radius:4px;background:#fff;cursor:pointer;font-size:11px;color:#666';
+  const diag = make('button', '진단 복사', LINK);
   diag.onclick = () => {
     const text = JSON.stringify({
       url: location.href,
       toggle: toggleText(),
       options: EXCLUDES.map((t) => t.value + ':' + !!findOption(t.value)),
+      total: readTotal(),
       status: status.textContent,
     }, null, 1);
     navigator.clipboard.writeText(text).then(() => { diag.textContent = '복사함'; }, () => { prompt('복사해서 보내줘', text); });
   };
 
   // 개발용: 쇼핑몰선택을 열기 전과 연 뒤의 전체 HTML을 msv-dom-shoptype.html로 내려받는다.
-  const dump = document.createElement('button');
-  dump.textContent = 'DOM 덤프';
-  dump.style.cssText = diag.style.cssText + ';margin-left:4px';
+  const dump = make('button', 'DOM 덤프', LINK);
   dump.onclick = async () => {
     dump.disabled = true;
     dump.textContent = '덤프 중...';
@@ -223,8 +272,8 @@
     dump.disabled = false;
   };
 
-  panel.appendChild(status);
-  panel.appendChild(diag);
-  panel.appendChild(dump);
+  footer.appendChild(diag);
+  footer.appendChild(dump);
+  panel.appendChild(footer);
   document.body.appendChild(panel);
 })();
