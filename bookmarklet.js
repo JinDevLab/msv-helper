@@ -1,5 +1,6 @@
 // msv-helper: 네이버 가격비교 n total 작업 보조.
 // 북마크의 로더(loader.js)가 원격 main에서 이 파일을 받아 실행한다. main에 올리면 팀 전체에 반영된다.
+// 고친 뒤에는 node scripts/build-oneline.js로 한 줄 버전을 다시 만든다.
 (() => {
   const PANEL_ID = 'msv-helper-panel';
   const FRAME_ID = 'msv-helper-frame';
