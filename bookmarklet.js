@@ -123,7 +123,7 @@
     const toggle = findToggle();
     if (toggle) {
       press(toggle);
-      await sleep(300);
+      await sleep(100);
     }
     const totalBefore = readTotal();
     press(option);
@@ -169,16 +169,16 @@
       }
     }
     // 목록은 바로 보이지만 몰 목록 응답이 오기 전에 누르면 저장이 반영되지 않을 수 있어 조금 기다린다.
-    await sleep(300);
+    await sleep(100);
     const target = findMall(mall);
     if (!target) return mall.label + ': 쇼핑몰 목록에 없음';
     for (const li of mallItems()) {
       if (isChecked(li) !== (on && li === target)) {
         press(li.querySelector('label') || li);
-        await sleep(150);
+        await sleep(100);
       }
     }
-    await sleep(300);
+    await sleep(100);
     const save = doc().querySelector('a[data-shp-area-id="shoptypesave"]');
     if (!save) return mall.label + ': 저장 버튼이 없음';
     const before = win().location.href;
