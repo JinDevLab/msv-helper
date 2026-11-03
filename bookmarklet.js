@@ -146,7 +146,7 @@
     return num ? num.textContent.trim() : null;
   };
 
-  // 패널 구성은 팀에서 쓰던 "N Total Helper"를 따른다.
+  // 패널은 상태를 칩으로 보여주고, 작업자가 누르는 버튼은 모두 제외·쿠팡 선택·시트 복사만 크게 둔다.
   const make = (tag, text, style) => {
     const node = document.createElement(tag);
     if (text) node.textContent = text;
@@ -155,24 +155,21 @@
   };
   const GREEN = '#03c75a';
   const MUTED = '#b5b9be';
-  const LINE = 'border-top:1px solid #eceef1;margin-top:12px;padding-top:12px';
-  const TITLE = 'margin-bottom:8px;font-weight:bold;font-size:13px;color:#333';
-  const ROW = 'display:flex;align-items:center;min-height:26px';
-  const TEXT_BTN = 'border:0;background:none;padding:2px 4px;font:13px sans-serif;cursor:pointer';
-  const BOX_BTN = 'padding:4px 10px;border:1px solid #dfe3e8;border-radius:6px;background:#fff;color:#333;font:12px sans-serif;cursor:pointer';
-  const WIDE_BTN = 'flex:1;padding:8px 0;border:1px solid #dfe3e8;border-radius:6px;background:#fff;color:#333;font:13px sans-serif;cursor:pointer';
+  const TEXT_BTN = 'border:0;background:none;padding:0 2px;font:16px/1 sans-serif;color:#999;cursor:pointer';
+  const BTN = 'flex:1;padding:6px 0;border:1px solid #dfe3e8;border-radius:6px;background:#fff;color:#333;font:12px sans-serif;cursor:pointer';
+  const LINK = 'border:0;background:none;padding:0;margin-left:8px;color:#aaa;font:11px sans-serif;cursor:pointer';
 
   const panel = make('div', '', [
-    'position:fixed', 'top:12px', 'right:12px', 'z-index:2147483647', 'width:280px', 'box-sizing:border-box',
-    'padding:14px 16px', 'background:#fff', 'color:#222', 'border:1px solid #dfe3e8', 'border-radius:10px',
-    'box-shadow:0 6px 20px rgba(0,0,0,.15)', 'font:13px/1.4 sans-serif', 'text-align:left',
+    'position:fixed', 'top:12px', 'right:12px', 'z-index:2147483647', 'width:230px', 'box-sizing:border-box',
+    'padding:10px 12px', 'background:#fff', 'color:#222', 'border:1px solid #dfe3e8', 'border-radius:10px',
+    'box-shadow:0 4px 14px rgba(0,0,0,.12)', 'font:12px/1.4 sans-serif', 'text-align:left',
   ].join(';'));
   panel.id = PANEL_ID;
 
   const header = make('div', '', 'display:flex;align-items:center');
-  header.appendChild(make('strong', '🛒 N Total Helper', 'flex:1;font-size:15px'));
+  header.appendChild(make('strong', 'N Total Helper', 'flex:1;font-size:13px'));
   const body = make('div');
-  const fold = make('button', '−', TEXT_BTN + ';font-size:18px;line-height:1;color:#666');
+  const fold = make('button', '−', TEXT_BTN);
   fold.title = '접기';
   fold.onclick = () => {
     const open = body.style.display !== 'none';
@@ -182,13 +179,13 @@
   };
   header.appendChild(fold);
   // iframe을 걷어내고 보던 주소를 일반 페이지로 다시 연다.
-  const close = make('button', '×', TEXT_BTN + ';font-size:18px;line-height:1;color:#999');
+  const close = make('button', '×', TEXT_BTN + ';margin-left:4px');
   close.title = '닫기';
   header.appendChild(close);
   panel.appendChild(header);
   panel.appendChild(body);
 
-  const status = make('div', '', 'margin-top:8px;font-size:11px;color:#888;white-space:pre-line');
+  const status = make('div', '', 'margin-top:6px;font-size:11px;color:#888;white-space:pre-line');
 
   // 작업 중에는 모든 버튼을 막아 같은 동작이 겹치지 않게 한다.
   let busy = false;
@@ -206,13 +203,6 @@
     render();
   };
 
-  const section = (title) => {
-    const box = make('div', '', body.childElementCount ? LINE : 'margin-top:12px');
-    box.appendChild(make('div', title, TITLE));
-    body.appendChild(box);
-    return box;
-  };
-
   // 칸반(스프레드시트)에 붙일 값: 검색어, URL, 전체 수, 쿠팡 수.
   // URL과 전체 수는 쿠팡을 고르기 직전 값이다. 숫자는 쉼표를 빼서 숫자 칸으로 들어가게 한다.
   const searchQuery = () => {
@@ -226,7 +216,7 @@
       status.textContent = what + ' 복사함';
       return true;
     } catch (err) {
-      status.textContent = what + ' 자동 복사가 막혔어. 복사 버튼을 다시 눌러.';
+      status.textContent = what + ' 자동 복사가 막혔어. 시트 복사를 다시 눌러.';
       return false;
     }
   };
@@ -237,100 +227,83 @@
     return [before.query, before.url, toNumber(before.total), saved ? toNumber(readTotal()) : ''].join('\t');
   };
 
-  // 1. fo=true. iframe 주소를 0.5초마다 보며 자동으로 붙이지만, 바로 붙이고 싶을 때 누른다.
-  const s1 = section('1. 필터 강제적용 (&fo=true)');
-  const foRow = make('div', '', ROW);
-  const foState = make('span', '', 'flex:1;font-weight:bold');
-  const foBtn = make('button', '적용', TEXT_BTN);
-  foBtn.onclick = () => {
-    const next = withFo(win().location);
-    if (next) win().location.replace(next);
-  };
-  foRow.appendChild(foState);
-  foRow.appendChild(foBtn);
-  s1.appendChild(foRow);
-
-  // 2. 필터별 상태와 버튼. 상태는 드롭다운 DOM과 주소로 판단한다.
-  const s2 = section('2. 개별 필터 제어');
-  const filterRows = [];
-  const addFilterRow = (icon, label, verb, getState, act) => {
-    const row = make('div', '', ROW);
-    row.appendChild(make('span', icon, 'width:22px'));
-    row.appendChild(make('span', label, 'flex:1'));
-    const state = make('span', '', 'width:64px;font-size:12px;font-weight:bold;text-align:right;margin-right:6px');
-    const btn = make('button', verb, TEXT_BTN);
-    btn.onclick = () => run(act);
-    row.appendChild(state);
-    row.appendChild(btn);
-    s2.appendChild(row);
-    filterRows.push({ state, btn, getState });
-  };
-  const ICONS = { exagency: '✈️', exused: '📦', exrental: '⏳' };
-  const NAMES = { exagency: '해외직구', exused: '중고 상품', exrental: '렌탈 상품' };
+  // 상태 칩: 적용됨은 초록, 아직이면 회색 테두리, 이 검색어에 없으면 흐리게 줄을 긋는다.
+  // fo=true는 0.5초마다 자동으로 붙으므로 상태만 보여준다.
   const paramOn = (name) => win().location.search.replace(/^\?/, '').split('&').includes(name + '=true');
   const excludeState = (target) => {
     if (paramOn(target.value)) return 'done';
     return findOption(target.value) ? 'ready' : 'none';
   };
-  for (const target of EXCLUDES) {
-    addFilterRow(ICONS[target.value], NAMES[target.value], '제외', () => excludeState(target), async () => [await exclude([target])]);
-  }
+  const CHIP = 'padding:2px 7px;border-radius:10px;font-size:11px;';
+  const CHIP_STYLES = {
+    done: 'background:' + GREEN + ';color:#fff;border:1px solid ' + GREEN,
+    ready: 'background:#fff;color:#555;border:1px solid #cfd3d8',
+    none: 'background:#fff;color:' + MUTED + ';border:1px solid #eceef1;text-decoration:line-through',
+  };
+  const chips = make('div', '', 'display:flex;flex-wrap:wrap;gap:4px;margin-top:8px');
+  body.appendChild(chips);
+  const chipList = [];
+  const addChip = (label, getState) => {
+    const chip = make('span', label, CHIP);
+    chips.appendChild(chip);
+    chipList.push({ chip, getState });
+  };
+  addChip('fo', () => (withFo(win().location) ? 'ready' : 'done'));
+  for (const target of EXCLUDES) addChip(target.label.slice(0, 2), () => excludeState(target));
+  addChip('쿠팡', () => (saved ? 'done' : 'ready'));
+
+  const actions = make('div', '', 'display:flex;gap:6px;margin-top:8px');
+  body.appendChild(actions);
   // 셋 중 이 검색어에 있고 아직 적용 안 된 것만 한 번에 제외한다.
-  addFilterRow('🚫', '모두 제외', '제외', () => {
-    const states = EXCLUDES.map(excludeState);
-    if (states.includes('ready')) return 'ready';
-    return states.includes('done') ? 'done' : 'none';
-  }, async () => [await exclude(EXCLUDES.filter((target) => excludeState(target) === 'ready'))]);
-  addFilterRow('🚀', '쿠팡 필터', '선택', () => {
-    if (saved) return 'done';
-    return doc().querySelector('a[data-shp-area-id="shoptype"]') ? 'ready' : 'none';
-  }, async () => {
+  const excludeBtn = make('button', '모두 제외', BTN);
+  excludeBtn.onclick = () => run(async () => [await exclude(EXCLUDES.filter((target) => excludeState(target) === 'ready'))]);
+  const coupangBtn = make('button', '쿠팡 선택', BTN);
+  coupangBtn.onclick = () => run(async () => {
     const before = { query: searchQuery(), url: win().location.href, total: readTotal() };
     const result = await selectOnlyMall(COUPANG);
     if (!result.endsWith('만 선택함')) return [result];
     saved = before;
     render();
     // 쿠팡을 고르면 작업이 끝난 것이므로 스프레드시트용 한 줄을 바로 복사한다.
-    await copyText(sheetRow(), '스프레드시트 한 줄');
+    await copyText(sheetRow(), '시트 한 줄');
     return [result, status.textContent];
   });
+  actions.appendChild(excludeBtn);
+  actions.appendChild(coupangBtn);
 
-  // 3. 전체 수(쿠팡 선택 전)와 쿠팡 수(선택 후).
-  const s3 = section('3. 상품 개수 모니터링');
-  const countRow = (label, getValue, what) => {
-    const row = make('div', '', ROW + ';margin-bottom:4px');
-    row.appendChild(make('span', label, 'flex:1'));
-    const btn = make('button', '복사', BOX_BTN);
-    btn.onclick = () => copyText(toNumber(getValue()), what);
-    row.appendChild(btn);
-    s3.appendChild(row);
-    return row.firstChild;
-  };
+  // 전체 수(쿠팡 선택 전)와 쿠팡 수(선택 후). 숫자를 누르면 그 숫자만 복사한다.
   const totalNow = () => (saved ? saved.total : readTotal());
   const coupangNow = () => (saved ? readTotal() : null);
-  const totalLabel = countRow('', totalNow, '전체 수');
-  const coupangLabel = countRow('', coupangNow, '쿠팡 수');
+  const counts = make('div', '', 'display:flex;gap:6px;margin-top:8px');
+  body.appendChild(counts);
+  const countBox = (label, getValue) => {
+    const box = make('button', '', 'flex:1;padding:4px 0;border:0;border-radius:6px;background:#f5f6f8;color:#222;font:12px sans-serif;cursor:pointer');
+    box.title = '눌러서 복사';
+    box.appendChild(make('div', label, 'font-size:10px;color:#888'));
+    const num = make('div', '', 'font-weight:bold;font-size:13px');
+    box.appendChild(num);
+    box.onclick = () => copyText(toNumber(getValue()), label);
+    counts.appendChild(box);
+    return num;
+  };
+  const totalLabel = countBox('전체 수', totalNow);
+  const coupangLabel = countBox('쿠팡 수', coupangNow);
 
-  const copies = make('div', '', 'display:flex;gap:8px;margin-top:12px');
-  const titleBtn = make('button', '📋 타이틀 복사', WIDE_BTN);
-  titleBtn.onclick = () => copyText(saved ? saved.query : searchQuery(), '타이틀');
-  const urlBtn = make('button', '🔗 URL 복사', WIDE_BTN);
-  urlBtn.onclick = () => copyText(saved ? saved.url : win().location.href, 'URL');
-  copies.appendChild(titleBtn);
-  copies.appendChild(urlBtn);
-  body.appendChild(copies);
-  const sheetBtn = make('button', '📊 스프레드시트 전체 복사', 'display:block;box-sizing:border-box;width:100%;margin-top:8px;padding:10px 0;border:0;border-radius:6px;'
-    + 'background:' + GREEN + ';color:#fff;font:bold 14px sans-serif;cursor:pointer');
-  sheetBtn.onclick = () => copyText(sheetRow(), '스프레드시트 한 줄');
+  const sheetBtn = make('button', '시트 한 줄 복사', 'display:block;box-sizing:border-box;width:100%;margin-top:8px;padding:7px 0;border:0;border-radius:6px;'
+    + 'background:' + GREEN + ';color:#fff;font:bold 12px sans-serif;cursor:pointer');
+  sheetBtn.onclick = () => copyText(sheetRow(), '시트 한 줄');
   body.appendChild(sheetBtn);
   body.appendChild(status);
 
-  // 개발용 버튼은 맨 아래 작게 둔다.
-  const LINK = 'border:0;background:none;padding:0;margin-left:8px;color:#bbb;font:11px sans-serif;cursor:pointer';
+  // 따로 복사와 개발용 버튼은 맨 아래 작게 둔다.
   const footer = make('div', '', 'margin-top:6px;text-align:right');
+  const titleBtn = make('button', '검색어', LINK);
+  titleBtn.onclick = () => copyText(saved ? saved.query : searchQuery(), '검색어');
+  const urlBtn = make('button', 'URL', LINK);
+  urlBtn.onclick = () => copyText(saved ? saved.url : win().location.href, 'URL');
 
   // 결과가 이상하면 이 버튼으로 상태를 복사해 개발자에게 보낸다.
-  const diag = make('button', '진단 복사', LINK);
+  const diag = make('button', '진단', LINK);
   diag.onclick = () => {
     const text = JSON.stringify({
       url: win().location.href,
@@ -344,7 +317,7 @@
   };
 
   // 개발용: 쇼핑몰선택을 열기 전과 연 뒤의 전체 HTML을 msv-dom-shoptype.html로 내려받는다.
-  const dump = make('button', 'DOM 덤프', LINK);
+  const dump = make('button', '덤프', LINK);
   dump.onclick = async () => {
     dump.disabled = true;
     dump.textContent = '덤프 중...';
@@ -365,17 +338,16 @@
     dump.textContent = '덤프 저장함';
     dump.disabled = false;
   };
-  footer.appendChild(diag);
-  footer.appendChild(dump);
+  for (const btn of [titleBtn, urlBtn, diag, dump]) footer.appendChild(btn);
   body.appendChild(footer);
 
-  // 상태 글자와 버튼을 지금 페이지에 맞춘다. iframe 안에서 페이지가 바뀌므로 주기적으로 부른다.
-  const STATES = {
-    done: ['적용됨', GREEN],
-    ready: ['가능', '#555'],
-    none: ['해당없음', MUTED],
-  };
+  // 상태와 버튼을 지금 페이지에 맞춘다. iframe 안에서 페이지가 바뀌므로 주기적으로 부른다.
   let lastQuery = null;
+  const setEnabled = (btn, on) => {
+    btn.disabled = !on || busy;
+    btn.style.color = btn.disabled ? MUTED : '#333';
+    btn.style.cursor = btn.disabled ? 'default' : 'pointer';
+  };
   function render() {
     let loaded = true;
     try {
@@ -389,22 +361,12 @@
     if (lastQuery !== null && query !== lastQuery) saved = null;
     lastQuery = query;
 
-    const foOn = !withFo(win().location);
-    foState.textContent = foOn ? '적용됨' : '미적용';
-    foState.style.color = foOn ? GREEN : '#e0464e';
-    foBtn.disabled = foOn || busy;
-    foBtn.style.color = foBtn.disabled ? MUTED : GREEN;
+    for (const { chip, getState } of chipList) chip.style.cssText = CHIP + CHIP_STYLES[getState()];
+    setEnabled(excludeBtn, EXCLUDES.some((target) => excludeState(target) === 'ready'));
+    setEnabled(coupangBtn, !saved && !!readTotal());
 
-    for (const row of filterRows) {
-      const key = row.getState();
-      row.state.textContent = STATES[key][0];
-      row.state.style.color = STATES[key][1];
-      row.btn.disabled = key !== 'ready' || busy;
-      row.btn.style.color = row.btn.disabled ? MUTED : GREEN;
-    }
-
-    totalLabel.textContent = '전체 수 (전) : ' + (totalNow() || '-') + ' 개';
-    coupangLabel.textContent = '쿠팡 수 (후) : ' + (coupangNow() || '-') + ' 개';
+    totalLabel.textContent = totalNow() || '-';
+    coupangLabel.textContent = coupangNow() || '-';
   }
 
   const ticker = setInterval(() => {
