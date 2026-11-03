@@ -12,16 +12,7 @@
     { label: '렌탈', value: 'exrental', show: 'rental' },
   ];
 
-  // fo=true가 없으면 붙인 주소를, 있으면 null을 돌려준다.
-  // 검색어 인코딩을 그대로 두려고 URLSearchParams 대신 문자열로 다룬다.
-  const withFo = (loc) => {
-    const pairs = loc.search.replace(/^\?/, '').split('&').filter(Boolean);
-    if (pairs.includes('fo=true')) return null;
-    const rest = pairs.filter((p) => p.split('=')[0] !== 'fo');
-    return loc.pathname + '?' + rest.concat('fo=true').join('&') + loc.hash;
-  };
-
-  // 한 번만 누르면 되도록 지금 페이지 위에 같은 사이트를 iframe으로 띄우고, 패널은 바깥 페이지에 둔다.
+  // 지금 페이지 위에 같은 사이트를 iframe으로 띄우고, 패널은 바깥 페이지에 둔다.
   // iframe 안에서 다시 검색해도 패널은 남는다. 네이버는 X-Frame-Options와 CSP가 없어 iframe이 열린다.
   const oldFrame = document.getElementById(FRAME_ID);
   const start = new URL(oldFrame ? oldFrame.contentWindow.location.href : location.href);
@@ -31,33 +22,27 @@
 
   const frame = document.createElement('iframe');
   frame.id = FRAME_ID;
-  frame.src = withFo(start) || start.pathname + start.search + start.hash;
+  frame.src = start.pathname + start.search + start.hash;
   frame.style.cssText = 'position:fixed;top:0;left:0;width:100vw;height:100vh;border:0;margin:0;z-index:2147483646;background:#fff';
   document.documentElement.style.overflow = 'hidden';
   document.body.appendChild(frame);
   const win = () => frame.contentWindow;
   const doc = () => frame.contentDocument;
 
-  // iframe 주소를 바깥 주소창에 맞추고, 새로 검색해서 fo=true가 빠지면 다시 붙인다.
+  // iframe 주소를 바깥 주소창에 맞춘다. fo=true는 n total이 아닌 작업에서는 필요 없어서 자동으로 붙이지 않는다.
   const sync = setInterval(() => {
     if (!frame.isConnected) {
       clearInterval(sync);
       return;
     }
-    let loc;
+    let href;
     try {
-      loc = win().location;
-      if (loc.href === 'about:blank') return;
+      href = win().location.href;
     } catch (err) {
       // 다른 사이트로 나가면 읽을 수 없다.
       return;
     }
-    const next = loc.pathname === '/search/all' && withFo(loc);
-    if (next) {
-      loc.replace(next);
-    } else if (location.href !== loc.href) {
-      history.replaceState(null, '', loc.href);
-    }
+    if (href !== 'about:blank' && location.href !== href) history.replaceState(null, '', href);
   }, 500);
 
   const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -121,14 +106,15 @@
     }, 15000);
   };
 
+  // n total을 시작할 때 fo=true와 제외를 한 번의 페이지 로드로 같이 붙인다.
   // 여러 개를 한 번에 제외해도 드롭다운에 "해외직구제외,중고제외"처럼 같이 적용된다(실제 네이버에서 확인).
   const exclude = async (targets) => {
-    const changes = {};
+    const changes = { fo: 'true' };
     for (const target of targets) {
       changes[target.value] = 'true';
       changes[target.show] = null;
     }
-    const names = targets.map((t) => t.label).join('·');
+    const names = ['fo'].concat(targets.map((t) => t.label)).join('·');
     if (!(await openWith(changes))) return names + ': 새 페이지에서 전체 수를 못 읽음';
     return names + ' 제외함 → ' + (toggleText() || '?');
   };
@@ -239,7 +225,6 @@
   };
 
   // 상태 칩: 적용됨은 초록, 아직이면 회색 테두리, 이 검색어에 없으면 흐리게 줄을 긋는다.
-  // fo=true는 0.5초마다 자동으로 붙으므로 상태만 보여준다.
   const paramOn = (name) => win().location.search.replace(/^\?/, '').split('&').includes(name + '=true');
   const excludeState = (target) => {
     if (paramOn(target.value)) return 'done';
@@ -259,14 +244,14 @@
     chips.appendChild(chip);
     chipList.push({ chip, getState });
   };
-  addChip('fo', () => (withFo(win().location) ? 'ready' : 'done'));
+  addChip('fo', () => (paramOn('fo') ? 'done' : 'ready'));
   for (const target of EXCLUDES) addChip(target.label.slice(0, 2), () => excludeState(target));
   addChip('쿠팡', () => (saved ? 'done' : 'ready'));
 
   const actions = make('div', '', 'display:flex;gap:6px;margin-top:8px');
   body.appendChild(actions);
-  // 셋 중 이 검색어에 있고 아직 적용 안 된 것만 한 번에 제외한다.
-  const excludeBtn = make('button', '모두 제외', BTN);
+  // fo=true와, 셋 중 이 검색어에 있고 아직 적용 안 된 제외를 한 번에 붙인다.
+  const excludeBtn = make('button', 'fo + 모두 제외', BTN);
   excludeBtn.onclick = () => run(async () => [await exclude(EXCLUDES.filter((target) => excludeState(target) === 'ready'))]);
   const coupangBtn = make('button', '쿠팡 선택', BTN);
   coupangBtn.onclick = () => run(async () => {
@@ -373,7 +358,7 @@
     lastQuery = query;
 
     for (const { chip, getState } of chipList) chip.style.cssText = CHIP + CHIP_STYLES[getState()];
-    setEnabled(excludeBtn, EXCLUDES.some((target) => excludeState(target) === 'ready'));
+    setEnabled(excludeBtn, !paramOn('fo') || EXCLUDES.some((target) => excludeState(target) === 'ready'));
     setEnabled(coupangBtn, !saved && !!readTotal());
 
     totalLabel.textContent = totalNow() || '-';
