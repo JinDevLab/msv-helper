@@ -4,7 +4,7 @@
 
 ## `main`에 합치기
 
-원격은 `origin`(`JinDevLab/msv-helper`)이다. 복붙용 단순 JS라서 변경마다 푸시하거나 합치지 않는다.
+원격은 `origin`(`JinDevLab/msv-helper`)이다. 로더가 `main`의 `bookmarklet.js`를 받아 쓰므로, `main`에 푸시하는 것이 곧 팀 전체 배포다. GitHub raw 캐시 때문에 반영까지 5분쯤 걸린다.
 
 평소에는 로컬 작업 브랜치에 커밋만 하고, 작업 브랜치를 원격에 올리지 않는다. 소유자가 됐다고 하면 아래 순서로 합친다.
 

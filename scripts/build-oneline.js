@@ -1,11 +1,13 @@
-// bookmarklet.js를 북마크 URL에 붙일 한 줄짜리 bookmarklet-oneline.js로 만든다.
-// 줄은 공백으로 잇는다. 그래서 원본에 줄 끝 // 주석이나 세미콜론 없이 끝나는 문장이 있으면 멈춘다.
+// loader.js를 북마크 URL에 붙일 한 줄짜리 bookmarklet-oneline.js로 만들고, 로더가 받아 실행할 bookmarklet.js의 문법도 검사한다.
+// 줄은 공백으로 잇는다. 그래서 로더에 줄 끝 // 주석이나 세미콜론 없이 끝나는 문장이 있으면 멈춘다.
 // 줄 앞뒤 공백과 주석만 있는 줄은 지우므로, 여러 줄 템플릿 문자열 안에서는 내용이 바뀔 수 있다.
+// bookmarklet.js는 줄바꿈을 살린 채 받아 실행하므로 이 제약이 없다.
 const fs = require('fs');
 const path = require('path');
 
 const root = path.join(__dirname, '..');
-const src = fs.readFileSync(path.join(root, 'bookmarklet.js'), 'utf8');
+new Function(fs.readFileSync(path.join(root, 'bookmarklet.js'), 'utf8'));
+const src = fs.readFileSync(path.join(root, 'loader.js'), 'utf8');
 
 const lines = src
   .replace(/\r/g, '')
