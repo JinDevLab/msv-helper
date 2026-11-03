@@ -215,19 +215,49 @@
   const step2 = step(2, '혼재 제거');
   step2.appendChild(make('div', '검색창에 -단어를 붙여 혼재를 뺀다.', 'font-size:12px;color:#666'));
 
+  // 칸반(스프레드시트)에 붙일 한 줄: 검색어, URL, 전체 수, 쿠팡 수를 탭으로 나눈다.
+  // URL은 쿠팡을 고르기 전 "전체" 상태의 주소다. 숫자는 쉼표를 빼서 숫자 칸으로 들어가게 한다.
+  const searchQuery = () => {
+    const pair = location.search.replace(/^\?/, '').split('&').find((p) => p.split('=')[0] === 'query');
+    return pair ? decodeURIComponent(pair.slice(6).replace(/\+/g, ' ')) : '';
+  };
+  const toNumber = (text) => (text || '').replace(/[^0-9]/g, '');
+  const copyText = async (text) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      return true;
+    } catch (err) {
+      return false;
+    }
+  };
+
   const step3 = step(3, '전체 수 · 쿠팡 수');
   const counts = make('div', '', 'display:none;margin-top:6px;padding:6px 8px;border-radius:6px;background:#f0faf4;font-size:12px');
+  let row = '';
   step3.appendChild(action(make('button', '쿠팡만 선택', PRIMARY), async () => {
+    const query = searchQuery();
+    const url = location.href;
     const total = readTotal();
     const result = await selectOnlyMall(COUPANG);
     if (!result.endsWith('만 선택함')) return [result];
+    const coupang = readTotal();
+    row = [query, url, toNumber(total), toNumber(coupang)].join('\t');
+
     counts.textContent = '';
     counts.appendChild(document.createTextNode('전체 '));
     counts.appendChild(make('b', total || '?'));
     counts.appendChild(document.createTextNode(' · 쿠팡 '));
-    counts.appendChild(make('b', readTotal() || '?'));
+    counts.appendChild(make('b', coupang || '?'));
+    // 자동 복사가 막히면(클릭 뒤 시간이 지나면 브라우저가 막는다) 이 버튼으로 다시 복사한다.
+    const again = make('button', '복사', 'float:right;border:0;background:none;padding:0;color:' + GREEN + ';font:bold 12px sans-serif;cursor:pointer');
+    again.onclick = async () => {
+      status.textContent = (await copyText(row)) ? '칸반용 한 줄을 복사했어.' : '복사 실패';
+    };
+    counts.appendChild(again);
     counts.style.display = 'block';
-    return [result];
+
+    const copied = await copyText(row);
+    return [result, copied ? '칸반용 한 줄을 복사했어. 시트에 붙여 넣어.' : '자동 복사가 막혔어. 숫자 옆 "복사"를 눌러.'];
   }));
   step3.appendChild(counts);
 
