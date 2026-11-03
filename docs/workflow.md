@@ -4,12 +4,12 @@
 
 ## `main`에 합치기
 
-원격 저장소가 없으므로 로컬에서 합친다. 원격을 붙이면 이 절을 원격 기준으로 고친다.
+원격은 `origin`(`JinDevLab/msv-helper`)이다.
 
-1. 작업 브랜치를 최신 `main` 위에 올린다: `git rebase main`. 충돌이 나면 양쪽 변경을 합치고, 판단이 어려우면 멈추고 묻는다.
-2. `node --check bookmarklet.js`가 통과하는지 확인한다.
+1. `git fetch origin` 후 `git rebase origin/main`으로 최신 `main` 위에 올린다. 충돌이 나면 양쪽 변경을 합치고, 판단이 어려우면 멈추고 묻는다.
+2. `node --check bookmarklet.js`가 통과하는지 확인하고 `git push -u origin HEAD`로 브랜치를 올린다. rebase로 커밋이 바뀌었으면 `--force-with-lease`를 쓴다.
 3. 소유자에게 승인을 받는다.
-4. `git switch main`과 `git merge --ff-only <브랜치>`로 합친다.
-5. 작업 브랜치를 지운다: `git branch -d <브랜치>`.
+4. `git push origin HEAD:main`으로 합친다. fast-forward만 받아들여지며, 거부되면 1번부터 다시 한다.
+5. `git switch main`과 `git pull --ff-only`로 로컬 `main`을 갱신하고, 원격과 로컬 작업 브랜치를 지운다.
 
-아직 `main`에 들어가지 않은 자기 작업 브랜치에만 rebase를 쓴다.
+아직 `main`에 들어가지 않은 자기 작업 브랜치에만 rebase와 `--force-with-lease`를 쓴다.
