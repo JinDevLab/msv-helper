@@ -259,7 +259,7 @@
   // 칸반(스프레드시트)에 붙일 값: 검색어, URL, 전체 수, 쿠팡 수.
   // URL과 전체 수는 쿠팡을 고르기 직전 값이다. 숫자는 쉼표를 빼서 숫자 칸으로 들어가게 한다.
   // 주소의 query는 필터를 바꾸면 "-단어"가 빠지고(xq로 따로 감), 검색창에는 입력한 그대로 남는다.
-  // 그래서 복사할 검색어는 검색창에서 읽고, 검색어가 바뀌었는지는 주소로 본다.
+  // 그래서 복사할 검색어는 검색창에서 읽고, 검색창이 없을 때만 주소를 본다.
   // 나뉜 주소에서는 origQuery에 입력 그대로가 있으므로 그쪽을 먼저 본다.
   const urlQuery = () => {
     const pairs = win().location.search.replace(/^\?/, '').split('&');
@@ -284,7 +284,7 @@
       return false;
     }
   };
-  // 쿠팡을 고르기 직전 상태. 검색어가 바뀌면 지운다.
+  // 쿠팡을 고르기 직전 상태. after는 쿠팡을 고른 뒤 주소이고, 주소가 이것과 달라지면(재검색 등) 지운다.
   let saved = null;
   const sheetRow = () => {
     const before = saved || { query: searchQuery(), url: win().location.href, total: readTotal() };
@@ -309,7 +309,7 @@
     const before = { query: searchQuery(), url: win().location.href, total: readTotal() };
     const result = await selectOnlyMall(COUPANG);
     if (!result.endsWith('만 선택함')) return [result];
-    saved = before;
+    saved = Object.assign(before, { after: win().location.href });
     render();
     await copyText(sheetRow(), '시트 한 줄');
     return [result, status.textContent];
@@ -419,7 +419,6 @@
   body.appendChild(footer);
 
   // 상태와 버튼을 지금 페이지에 맞춘다. iframe 안에서 페이지가 바뀌므로 주기적으로 부른다.
-  let lastQuery = null;
   const setEnabled = (btn, on) => {
     btn.disabled = !on || busy;
     btn.style.color = btn.disabled ? MUTED : '#333';
@@ -434,9 +433,8 @@
     }
     if (!loaded) return;
 
-    const query = urlQuery();
-    if (lastQuery !== null && query !== lastQuery) saved = null;
-    lastQuery = query;
+    // 같은 검색어로 다시 검색해도 네이버는 쿠팡 선택을 풀고 주소를 바꾼다.
+    if (saved && win().location.href !== saved.after) saved = null;
 
     for (const { chip, getState } of chipList) {
       const state = getState();
