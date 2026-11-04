@@ -197,6 +197,10 @@
     if (cls) node.className = cls;
     return node;
   };
+  // 값이 같으면 쓰지 않는다. 같은 값이라도 쓰면 페이지 전체의 스타일과 레이아웃을 다시 계산하게 된다.
+  const put = (node, key, value) => {
+    if (node[key] !== value) node[key] = value;
+  };
   const CSS = [
     '{position:fixed;top:12px;right:12px;z-index:2147483647;width:272px;background:#fff;color:#2b2f33;border:1px solid #c9ced4;border-radius:4px;'
       + 'box-shadow:0 6px 20px rgba(43,47,51,.18);font:12px/1.4 Pretendard,"Malgun Gothic","Apple SD Gothic Neo",sans-serif;text-align:left}',
@@ -517,8 +521,8 @@
       const on = mall.ids.some((id) => found.has(id));
       any = any || on;
       row.classList.toggle('on', on);
-      row.disabled = !on;
-      state.textContent = on ? 'ON' : 'OFF';
+      put(row, 'disabled', !on);
+      put(state, 'textContent', on ? 'ON' : 'OFF');
     }
     // 하나라도 ON이 되면 펼치고, 모두 OFF가 되면 접는다. 그 사이에는 손으로 접고 펼 수 있다.
     if (any !== anyBefore) setDetOpen(any);
@@ -532,16 +536,16 @@
 
     for (const { chip, getState } of chipList) {
       const state = getState();
-      chip.dataset.s = state;
-      chip.disabled = state === 'none' || busy;
+      put(chip.dataset, 's', state);
+      put(chip, 'disabled', state === 'none' || busy);
     }
-    excludeBtn.disabled = busy || (paramOn('fo') && !EXCLUDES.some((target) => excludeState(target) === 'ready'));
-    coupangBtn.disabled = busy || coupangOn() || !readTotal();
+    put(excludeBtn, 'disabled', busy || (paramOn('fo') && !EXCLUDES.some((target) => excludeState(target) === 'ready')));
+    put(coupangBtn, 'disabled', busy || coupangOn() || !readTotal());
 
-    queryCell.textContent = queryNow() || '-';
-    urlCell.textContent = readable(urlNow());
-    totalCell.textContent = totalNow() || '-';
-    coupangCell.textContent = coupangNow() || '-';
+    put(queryCell, 'textContent', queryNow() || '-');
+    put(urlCell, 'textContent', readable(urlNow()));
+    put(totalCell, 'textContent', totalNow() || '-');
+    put(coupangCell, 'textContent', coupangNow() || '-');
     detect();
   }
 
@@ -550,7 +554,8 @@
       clearInterval(ticker);
       return;
     }
-    render();
+    // 다른 탭을 보고 있으면 쉬었다가, 돌아오면 다음 차례에 맞춘다.
+    if (!document.hidden) render();
   }, 700);
 
   close.onclick = () => {
