@@ -162,17 +162,23 @@
     if (!toggle) return mall.label + ': 쇼핑몰선택이 없는 화면';
     const layer = toggle.parentElement.querySelector('[class*="subFilter_layer_mall"]');
     if (!layer || !layer.classList.contains('open')) press(toggle);
-    if (!(await waitFor(() => findMall(mall), 3000))) {
+    // 몰이 없을 때 오래 붙잡지 않도록, 탭을 바꾸기 전과 뒤를 합쳐 3초만 기다린다.
+    if (!(await waitFor(() => findMall(mall), 1500))) {
       const tab = doc().querySelector('li[data-shp-area-id="shoptab"][data-shp-contents-type="오픈마켓/종합몰"] a');
       if (tab) {
         press(tab);
-        await waitFor(() => findMall(mall), 3000);
+        await waitFor(() => findMall(mall), 1500);
       }
     }
     // 목록은 바로 보이지만 몰 목록 응답이 오기 전에 누르면 저장이 반영되지 않을 수 있어 조금 기다린다.
     await sleep(100);
     const target = findMall(mall);
-    if (!target) return mall.label + ': 쇼핑몰 목록에 없음';
+    if (!target) {
+      // 연 레이어를 닫고 끝낸다. 열어 두면 멈춘 것처럼 보인다.
+      const opened = toggle.parentElement.querySelector('[class*="subFilter_layer_mall"]');
+      if (opened && opened.classList.contains('open')) press(toggle);
+      return mall.label + NO_MALL;
+    }
     for (const li of mallItems()) {
       if (isChecked(li) !== (on && li === target)) {
         press(li.querySelector('label') || li);
@@ -191,6 +197,7 @@
     return mall.label + (on ? '만 선택함' : ' 선택 끔');
   };
   const selectOnlyMall = (mall) => setMall(mall, true);
+  const NO_MALL = ': 쇼핑몰 목록에 없음';
 
   // 판매처 탭 "전체" 옆 숫자. 쿠팡만 선택하기 전에는 전체 수, 뒤에는 쿠팡 수다.
   const readTotal = () => {
@@ -340,7 +347,7 @@
   const queryNow = () => (saved ? saved.query : searchQuery());
   const urlNow = () => (saved ? saved.url : win().location.href);
   const totalNow = () => (saved ? saved.total : readTotal());
-  const coupangNow = () => (saved ? readTotal() : null);
+  const coupangNow = () => (saved ? saved.coupang || readTotal() : null);
   const sheetRow = () => [queryNow(), urlNow(), toNumber(totalNow()), toNumber(coupangNow())].join('\t');
   const copyRow = () => copyText(sheetRow(), '시트 한 줄', cells);
 
@@ -355,6 +362,13 @@
   const pickCoupang = async () => {
     const before = { query: searchQuery(), url: win().location.href, total: readTotal() };
     const result = await selectOnlyMall(COUPANG);
+    // 이 검색어에 쿠팡이 없으면 쿠팡 수는 0이다. 주소는 그대로 두고 0으로 한 줄을 복사해 작업을 끝낸다.
+    if (result === COUPANG.label + NO_MALL) {
+      saved = Object.assign(before, { after: win().location.href, coupang: '0' });
+      render();
+      await copyRow();
+      return ['쿠팡 없음: 쿠팡 수 0으로 복사', status.textContent];
+    }
     if (!result.endsWith('만 선택함')) return [result];
     saved = Object.assign(before, { after: win().location.href });
     render();
