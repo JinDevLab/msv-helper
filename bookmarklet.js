@@ -99,7 +99,7 @@
     loc.href = loc.pathname + '?' + pairs.join('&') + loc.hash;
     return waitFor(() => {
       try {
-        return doc() !== before && doc().readyState === 'complete' && !!readTotal();
+        return doc() !== before && doc().readyState === 'complete' && (!!readTotal() || similarOnly());
       } catch (err) {
         return false;
       }
@@ -139,6 +139,7 @@
     const lines = [];
     if (!paramOn('fo')) {
       if (!(await openWith({ fo: 'true' }))) return ['fo: 새 페이지에서 전체 수를 못 읽음'];
+      if (similarOnly()) return [SIMILAR];
       lines.push('fo 켬');
     }
     for (const target of EXCLUDES) {
@@ -198,6 +199,13 @@
   };
   const selectOnlyMall = (mall) => setMall(mall, true);
   const NO_MALL = ': 쇼핑몰 목록에 없음';
+
+  // fo=true로 검색어 그대로 찾은 상품이 0건이면, 네이버는 판매처 탭과 필터 없이 "유사한 상품" 목록을 보여준다.
+  const similarOnly = () => {
+    const info = doc().querySelector('[class*="resultSummary_result_info"]');
+    return !readTotal() && !!info && info.textContent.includes('유사한 상품');
+  };
+  const SIMILAR = 'fo 결과 0건: 유사한 상품 화면이라 제외를 건너뜀';
 
   // 판매처 탭 "전체" 옆 숫자. 쿠팡만 선택하기 전에는 전체 수, 뒤에는 쿠팡 수다.
   const readTotal = () => {
