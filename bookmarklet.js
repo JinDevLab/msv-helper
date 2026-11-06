@@ -129,8 +129,8 @@
     const totalBefore = readTotal();
     press(option);
     if (!(await waitFor(() => win().location.href + '|' + toggleText() !== before, 5000))) return target.label + ': 눌렀지만 변화 없음';
-    // 고정으로 쉬지 않고 "전체" 숫자가 바뀔 때까지 기다린다. 제외할 상품이 없으면 숫자가 그대로라 3초에서 멈춘다.
-    await waitFor(() => readTotal() !== totalBefore, 3000);
+    // 고정으로 쉬지 않고 "전체" 숫자가 바뀔 때까지 기다린다. 제외할 상품이 없으면 숫자가 그대로라, 쓸데없이 늦어지지 않게 1초만 기다린다.
+    await waitFor(() => readTotal() !== totalBefore, 1000);
     return target.label + (paramOn(target.value) ? ' 제외함' : ' 제외 끔');
   };
 
