@@ -144,12 +144,12 @@
     if (!toggle) return mall.label + ': 쇼핑몰선택이 없는 화면';
     const layer = toggle.parentElement.querySelector('[class*="subFilter_layer_mall"]');
     if (!layer || !layer.classList.contains('open')) press(toggle);
-    // 몰이 없을 때 오래 붙잡지 않도록, 탭을 바꾸기 전과 뒤를 합쳐 3초만 기다린다.
-    if (!(await waitFor(() => findMall(mall), 1500))) {
+    // 몰이 없을 때 오래 붙잡지 않도록, 탭을 바꾸기 전과 뒤를 합쳐 1.5초만 기다린다.
+    if (!(await waitFor(() => findMall(mall), 1000))) {
       const tab = doc().querySelector('li[data-shp-area-id="shoptab"][data-shp-contents-type="오픈마켓/종합몰"] a');
       if (tab) {
         press(tab);
-        await waitFor(() => findMall(mall), 1500);
+        await waitFor(() => findMall(mall), 500);
       }
     }
     // 목록은 바로 보이지만 몰 목록 응답이 오기 전에 누르면 저장이 반영되지 않을 수 있어 조금 기다린다.
@@ -175,13 +175,15 @@
     press(save);
     if (!(await waitFor(() => win().location.href !== before, 5000))) return mall.label + ': 저장했지만 주소 변화 없음';
     // 쿠팡 수를 바로 읽으므로 "전체" 숫자가 바뀔 때까지 기다린다.
-    await waitFor(() => readTotal() !== totalBefore, 5000);
+    // 결과가 0건이면 판매처 탭이 사라지고 "검색 결과가 없습니다"가 뜬다.
+    await waitFor(() => (!!readTotal() && readTotal() !== totalBefore) || noResult(), 5000);
     return mall.label + (on ? '만 선택함' : ' 선택 끔');
   };
   const selectOnlyMall = (mall) => setMall(mall, true);
   const NO_MALL = ': 쇼핑몰 목록에 없음';
 
   // fo=true로 검색어 그대로 찾은 상품이 0건이면, 네이버는 판매처 탭과 필터 없이 "유사한 상품" 목록을 보여준다.
+  const noResult = () => !readTotal() && !!doc().querySelector('[class*="noResult"]');
   const similarOnly = () => {
     const info = doc().querySelector('[class*="resultSummary_result_info"]');
     return !readTotal() && !!info && info.textContent.includes('유사한 상품');
@@ -340,7 +342,7 @@
   const queryNow = () => (saved ? saved.query : searchQuery());
   const urlNow = () => (saved ? saved.url : win().location.href);
   const totalNow = () => (saved ? saved.total : readTotal());
-  const coupangNow = () => (saved ? saved.coupang || readTotal() : null);
+  const coupangNow = () => (saved ? saved.coupang || readTotal() || (noResult() ? '0' : null) : null);
   const sheetRow = () => [queryNow(), urlNow(), toNumber(totalNow()), toNumber(coupangNow())].join('\t');
   const copyRow = () => copyText(sheetRow(), '시트 한 줄', cells);
 
