@@ -89,8 +89,9 @@ async def main():
                 print('코드를 넣지 못함:', err)
 
         def watch(page):
-            # load는 바깥 페이지가 새로 열릴 때만 온다. iframe 안의 이동에는 오지 않는다.
-            page.on('load', lambda: asyncio.ensure_future(inject(page)))
+            # 페이지가 새로 열릴 때마다 HTML을 다 읽은 시점에 넣는다. load는 이미지와 광고까지 다 받아야 와서 늦다.
+            # 패널 코드는 필요한 요소가 그려질 때까지 스스로 기다린다. iframe 안의 이동에는 오지 않는다.
+            page.on('domcontentloaded', lambda: asyncio.ensure_future(inject(page)))
 
         for page in context.pages:
             watch(page)

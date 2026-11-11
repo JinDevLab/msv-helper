@@ -24,7 +24,8 @@
     const end = Date.now() + timeout;
     while (Date.now() < end) {
       if (check()) return true;
-      await sleep(100);
+      // 조건이 맞은 걸 늦게 알아채지 않도록 자주 본다. 확인 한 번은 DOM을 조금 읽는 정도라 가볍다.
+      await sleep(30);
     }
     return false;
   };
@@ -83,6 +84,10 @@
     }
   };
 
+  // 로더는 HTML을 다 읽은 시점에 넣으므로, 네이버 React가 요소에 아직 연결되지 않았을 수 있다.
+  // 연결 전에 누르면 무시된다. React가 요소에 붙이는 __react 속성으로 연결됐는지 본다.
+  const live = (el) => !!el && Object.keys(el).some((key) => key.startsWith('__react'));
+
   // NPCS(카탈로그 페이지)에서는 패널을 띄우지 않고 "동일 판매처 묶어보기"만 끈다. 열릴 때마다 기본으로 켜져 있다.
   // 켜져 있으면 버튼에 aria-pressed="true"가 붙는다.
   if (location.pathname.startsWith('/catalog')) {
@@ -90,6 +95,8 @@
     const bundled = () => !!bundle() && bundle().getAttribute('aria-pressed') === 'true';
     (async () => {
       if (!(await waitFor(bundle, 15000))) return;
+      // 끝내 연결이 안 보이면 그냥 누른다.
+      await waitFor(() => live(bundle()), 5000);
       // 화면이 막 그려진 직후에는 누른 것이 무시될 수 있어 한 번 더 시도한다.
       for (let i = 0; i < 2 && bundled(); i++) {
         press(bundle());
@@ -101,7 +108,8 @@
 
   // 드롭다운을 열고 항목을 누른 뒤, 주소나 토글 글자가 바뀔 때까지 기다린다.
   // 끌 때도 같은 항목을 다시 누른다. 클릭 뒤 DOM이 새로 그려지므로 항목은 매번 다시 찾는다.
-  const clickOption = async (target) => {
+  // more는 이어서 누를 항목이 남았는지 알려준다. 남은 게 없으면 패널이 숫자를 알아서 맞추므로 기다리지 않는다.
+  const clickOption = async (target, more) => {
     const option = findOption(target.value);
     if (!option) return target.label + ': 이 검색어에는 없음';
     const before = win().location.href + '|' + toggleText();
@@ -114,7 +122,7 @@
     press(option);
     if (!(await waitFor(() => win().location.href + '|' + toggleText() !== before, 5000))) return target.label + ': 눌렀지만 변화 없음';
     // 고정으로 쉬지 않고 "전체" 숫자가 바뀔 때까지 기다린다. 제외할 상품이 없으면 숫자가 그대로라, 쓸데없이 늦어지지 않게 1초만 기다린다.
-    await waitFor(() => readTotal() !== totalBefore, 1000);
+    if (more && more()) await waitFor(() => readTotal() !== totalBefore, 1000);
     return target.label + (paramOn(target.value) ? ' 제외함' : ' 제외 끔');
   };
 
@@ -124,7 +132,10 @@
     const lines = [];
     if (!paramOn('fo')) return openWith({ fo: 'true' }, 'exclude');
     for (const target of EXCLUDES) {
-      if (excludeState(target) === 'ready') lines.push(await clickOption(target));
+      if (excludeState(target) === 'ready') {
+        const rest = EXCLUDES.slice(EXCLUDES.indexOf(target) + 1);
+        lines.push(await clickOption(target, () => rest.some((next) => excludeState(next) === 'ready')));
+      }
     }
     return lines;
   };
@@ -578,9 +589,15 @@
   // fo를 붙이느라 페이지를 새로 열었으면, 전체 수가 보일 때 남은 제외를 이어서 누른다.
   if (sessionStorage.getItem(NEXT_KEY) === 'exclude') {
     sessionStorage.removeItem(NEXT_KEY);
-    waitFor(() => !!readTotal() || similarOnly(), 15000).then((ready) => {
-      if (similarOnly()) status.textContent = SIMILAR;
-      else if (ready) run(foAndExclude);
+    // 로더는 HTML을 다 읽은 시점에 넣으므로, React가 드롭다운에 연결될 때까지 기다린 뒤 누른다.
+    waitFor(() => !!readTotal() || similarOnly(), 15000).then(async (ready) => {
+      if (similarOnly()) {
+        status.textContent = SIMILAR;
+        return;
+      }
+      if (!ready) return;
+      await waitFor(() => !findToggle() || live(findToggle()), 5000);
+      run(foAndExclude);
     });
   }
 })();

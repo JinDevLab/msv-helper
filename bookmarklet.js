@@ -51,7 +51,8 @@
     const end = Date.now() + timeout;
     while (Date.now() < end) {
       if (check()) return true;
-      await sleep(100);
+      // 조건이 맞은 걸 늦게 알아채지 않도록 자주 본다. 확인 한 번은 DOM을 조금 읽는 정도라 가볍다.
+      await sleep(30);
     }
     return false;
   };
@@ -117,7 +118,8 @@
 
   // 드롭다운을 열고 항목을 누른 뒤, 주소나 토글 글자가 바뀔 때까지 기다린다.
   // 끌 때도 같은 항목을 다시 누른다. 클릭 뒤 DOM이 새로 그려지므로 항목은 매번 다시 찾는다.
-  const clickOption = async (target) => {
+  // more는 이어서 누를 항목이 남았는지 알려준다. 남은 게 없으면 패널이 숫자를 알아서 맞추므로 기다리지 않는다.
+  const clickOption = async (target, more) => {
     const option = findOption(target.value);
     if (!option) return target.label + ': 이 검색어에는 없음';
     const before = win().location.href + '|' + toggleText();
@@ -130,7 +132,7 @@
     press(option);
     if (!(await waitFor(() => win().location.href + '|' + toggleText() !== before, 5000))) return target.label + ': 눌렀지만 변화 없음';
     // 고정으로 쉬지 않고 "전체" 숫자가 바뀔 때까지 기다린다. 제외할 상품이 없으면 숫자가 그대로라, 쓸데없이 늦어지지 않게 1초만 기다린다.
-    await waitFor(() => readTotal() !== totalBefore, 1000);
+    if (more && more()) await waitFor(() => readTotal() !== totalBefore, 1000);
     return target.label + (paramOn(target.value) ? ' 제외함' : ' 제외 끔');
   };
 
@@ -143,7 +145,10 @@
       lines.push('fo 켬');
     }
     for (const target of EXCLUDES) {
-      if (excludeState(target) === 'ready') lines.push(await clickOption(target));
+      if (excludeState(target) === 'ready') {
+        const rest = EXCLUDES.slice(EXCLUDES.indexOf(target) + 1);
+        lines.push(await clickOption(target, () => rest.some((next) => excludeState(next) === 'ready')));
+      }
     }
     return lines;
   };
