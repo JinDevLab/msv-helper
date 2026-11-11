@@ -100,7 +100,8 @@
     loc.href = loc.pathname + '?' + pairs.join('&') + loc.hash;
     return waitFor(() => {
       try {
-        return doc() !== before && doc().readyState === 'complete' && (!!readTotal() || similarOnly());
+        // 이미지와 광고까지 기다리지 않고 HTML을 다 읽으면 넘어간다. React 연결은 아래에서 따로 기다린다.
+        return doc() !== before && doc().readyState !== 'loading' && (!!readTotal() || similarOnly());
       } catch (err) {
         return false;
       }
@@ -142,6 +143,8 @@
     if (!paramOn('fo')) {
       if (!(await openWith({ fo: 'true' }))) return ['fo: 새 페이지에서 전체 수를 못 읽음'];
       if (similarOnly()) return [SIMILAR];
+      // 네이버 React가 드롭다운에 연결되기 전에 누르면 무시된다. React가 붙이는 __react 속성이 생길 때까지 기다린다. 끝내 안 보이면 그냥 누른다.
+      await waitFor(() => !findToggle() || Object.keys(findToggle()).some((key) => key.startsWith('__react')), 5000);
       lines.push('fo 켬');
     }
     for (const target of EXCLUDES) {
@@ -200,7 +203,8 @@
     if (!(await waitFor(() => win().location.href !== before, 5000))) return mall.label + ': 저장했지만 주소 변화 없음';
     // 쿠팡 수를 바로 읽으므로 "전체" 숫자가 바뀔 때까지 기다린다.
     // 결과가 0건이면 판매처 탭이 사라지고 "검색 결과가 없습니다"가 뜬다.
-    await waitFor(() => (!!readTotal() && readTotal() !== totalBefore) || noResult(), 5000);
+    // 전체가 모두 쿠팡이면 숫자가 그대로라 끝까지 기다리게 되므로 2초에서 멈춘다. 응답이 그보다 늦으면 저장 전 숫자가 남을 수 있다.
+    await waitFor(() => (!!readTotal() && readTotal() !== totalBefore) || noResult(), 2000);
     return mall.label + (on ? '만 선택함' : ' 선택 끔');
   };
   const selectOnlyMall = (mall) => setMall(mall, true);
